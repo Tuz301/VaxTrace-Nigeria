@@ -1,0 +1,543 @@
+// ============================================
+// VaxTrace Nigeria - Vaccine Stock Protobuf Definitions
+// ============================================
+// 
+// This file defines the Protocol Buffers schema for vaccine stock data.
+// Protobuf is used to optimize bandwidth for 3G/4G networks in Nigeria.
+// 
+// Benefits over JSON:
+// - 80% smaller payload size
+// - Faster serialization/deserialization
+// - Strongly typed schema
+// - Forward/backward compatibility
+// 
+// Usage:
+// 1. Compile to JavaScript: protoc --js_out=import_style=commonjs,binary:. vaccine_stock.proto
+// 2. Use in Node.js backend and Next.js frontend
+// ============================================
+
+syntax = "proto3";
+
+package vaxtrace.stock;
+
+// ============================================
+// ENUMS
+// ============================================
+
+// Stock status (Stoplight System)
+enum StockStatus {
+  STOCK_STATUS_UNKNOWN = 0;
+  OPTIMAL = 1;           // Green: 3-6 months of stock
+  UNDERSTOCKED = 2;     // Yellow: Below min but not zero
+  STOCKOUT = 3;         // Red: Zero stock
+  OVERSTOCKED = 4;      // Blue: Above max (risk of expiry)
+}
+
+// VVM (Vaccine Vial Monitor) Stage
+enum VVMStage {
+  VVM_STAGE_UNKNOWN = 0;
+  STAGE_1 = 1;  // OK to use
+  STAGE_2 = 2;  // OK to use
+  STAGE_3 = 3;  // Use with caution
+  STAGE_4 = 4;  // Do not use
+}
+
+// VVM UI State for frontend
+enum VVMUIState {
+  VVM_UI_UNKNOWN = 0;
+  HEALTHY = 1;    // Stage 1-2
+  WARNING = 2;    // Stage 3
+  CRITICAL = 3;   // Stage 4
+}
+
+// Expiry risk level
+enum ExpiryRisk {
+  EXPIRY_RISK_UNKNOWN = 0;
+  LOW = 1;        // > 90 days
+  MEDIUM = 2;     // 30-90 days
+  HIGH = 3;       // < 30 days
+  EXPIRED = 4;    // Already expired
+}
+
+// Facility type
+enum FacilityType {
+  FACILITY_TYPE_UNKNOWN = 0;
+  WAREHOUSE = 1;
+  CLINIC = 2;
+  HOSPITAL = 3;
+  PHC = 4;        // Primary Health Centre
+}
+
+// Alert severity
+enum AlertSeverity {
+  ALERT_SEVERITY_UNKNOWN = 0;
+  LOW = 1;
+  MEDIUM = 2;
+  HIGH = 3;
+  CRITICAL = 4;
+}
+
+// Alert type
+enum AlertType {
+  ALERT_TYPE_UNKNOWN = 0;
+  STOCKOUT = 1;
+  NEAR_EXPIRY = 2;
+  TEMPERATURE_EXCURSION = 3;
+  VVM_STAGE_3 = 4;
+  VVM_STAGE_4 = 5;
+  POWER_OUTAGE = 6;
+  DELIVERY_DELAY = 7;
+}
+
+// Requisition status
+enum RequisitionStatus {
+  REQUISITION_STATUS_UNKNOWN = 0;
+  INITIATED = 1;
+  SUBMITTED = 2;
+  AUTHORIZED = 3;
+  APPROVED = 4;
+  RELEASED = 5;
+  SHIPPED = 6;
+  RECEIVED = 7;
+  REJECTED = 8;
+}
+
+// User role
+enum UserRole {
+  USER_ROLE_UNKNOWN = 0;
+  NPHCDA_DIRECTOR = 1;
+  STATE_COLD_CHAIN_OFFICER = 2;
+  LGA_LOGISTICS_OFFICER = 3;
+  FACILITY_IN_CHARGE = 4;
+  SYSTEM_ADMIN = 5;
+}
+
+// ============================================
+// MESSAGES
+// ============================================
+
+// Geographic location
+message GeoLocation {
+  double latitude = 1;
+  double longitude = 2;
+  double altitude = 3;  // Optional
+}
+
+// Geographic hierarchy (Zone > State > LGA > Facility)
+message Location {
+  string id = 1;
+  string code = 2;
+  string name = 3;
+  FacilityType type = 4;
+  string parent_id = 5;  // For hierarchical structure
+  GeoLocation geo = 6;
+  map<string, string> metadata = 7;  // Flexible metadata
+  int64 created_at = 8;
+  int64 updated_at = 9;
+}
+
+// Vaccine product information
+message VaccineProduct {
+  string id = 1;
+  string code = 2;      // e.g., 'BCG', 'OPV'
+  string name = 3;
+  string category = 4;  // 'routine', 'campaign', 'covid'
+  int32 doses_per_vial = 5;
+  double min_storage_temp = 6;
+  double max_storage_temp = 7;
+  int32 shelf_life_months = 8;
+  bool requires_cold_chain = 9;
+  double min_months_of_stock = 10;
+  double max_months_of_stock = 11;
+}
+
+// Product batch with GS1 standards
+message ProductBatch {
+  string id = 1;
+  string product_id = 2;
+  string batch_number = 3;
+  string gtin = 4;      // Global Trade Item Number
+  string lot_number = 5;
+  int64 expiry_date = 6;  // Unix timestamp
+  string manufacturer = 7;
+  string country_of_origin = 8;
+  VVMStage vvm_type = 9;
+  VVMStage vvm_stage_current = 10;
+  bool is_quarantined = 11;
+  string quarantine_reason = 12;
+  int64 quality_check_date = 13;
+  map<string, string> metadata = 14;
+  int64 created_at = 15;
+  int64 updated_at = 16;
+}
+
+// Stock snapshot for a facility
+message StockSnapshot {
+  string id = 1;
+  string facility_id = 2;
+  string vaccine_id = 3;
+  string batch_id = 4;
+  
+  // Stock information
+  int32 quantity_on_hand = 5;
+  string lot_number = 6;
+  int64 expiry_date = 7;
+  VVMStage vvm_stage = 8;
+  
+  // Calculated metrics
+  double months_of_stock = 9;
+  double average_monthly_consumption = 10;
+  StockStatus stock_status = 11;
+  
+  // Cold chain
+  double current_temp = 12;
+  int64 last_temp_reading_at = 13;
+  int32 temp_excursion_count = 14;
+  
+  // Timestamps
+  int64 snapshot_date = 15;    // Unix timestamp (date only)
+  int64 snapshot_time = 16;   // Unix timestamp
+  int64 synced_from_openlmis_at = 17;
+}
+
+// Stock ledger entry (historical tracking)
+message StockLedgerEntry {
+  string id = 1;
+  string facility_id = 2;
+  string lga_id = 3;
+  string state_id = 4;
+  string vaccine_id = 5;
+  string batch_id = 6;
+  
+  // Stock information
+  int32 quantity_on_hand = 7;
+  VVMStage vvm_stage = 8;
+  
+  // Transaction details
+  string transaction_type = 9;  // 'receipt', 'issue', 'adjustment', 'loss'
+  string transaction_reference = 10;
+  
+  // Timestamp
+  int64 snapshot_date = 11;
+  int64 snapshot_time = 12;
+}
+
+// Alert message
+message Alert {
+  string id = 1;
+  AlertType type = 2;
+  AlertSeverity severity = 3;
+  string facility_id = 4;
+  string facility_name = 5;
+  string state = 6;
+  string lga = 7;
+  string message = 8;
+  int64 created_at = 9;
+  bool is_resolved = 10;
+  string resolved_by = 11;
+  int64 resolved_at = 12;
+  string resolution_notes = 13;
+  map<string, string> data = 14;  // Additional alert data
+}
+
+// Requisition (order from OpenLMIS)
+message Requisition {
+  string id = 1;
+  string facility_id = 2;
+  string facility_name = 3;
+  string state = 4;
+  string lga = 5;
+  string program = 6;
+  RequisitionStatus status = 7;
+  string status_display = 8;
+  
+  // Line items
+  repeated RequisitionLineItem items = 9;
+  
+  // Dates
+  int64 created_date = 10;
+  int64 submitted_date = 11;
+  int64 approved_date = 12;
+  int64 shipped_date = 13;
+  int64 received_date = 14;
+  
+  // Calculated
+  int32 lead_time_days = 15;
+}
+
+// Requisition line item
+message RequisitionLineItem {
+  string product_code = 1;
+  string product_name = 2;
+  int32 requested_quantity = 3;
+  int32 approved_quantity = 4;
+  int32 received_quantity = 5;
+  double fill_rate = 6;  // 0.0 to 1.0
+}
+
+// Predictive insight (Crystal Ball)
+message PredictiveInsight {
+  string location_id = 1;
+  string location_name = 2;
+  string product_id = 3;
+  string product_name = 4;
+  int64 projected_stockout_date = 5;
+  int32 days_until_stockout = 6;
+  double confidence_score = 7;  // 0.0 to 1.0
+  int32 suggested_replenishment_qty = 8;
+  string urgency_level = 9;  // 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW'
+  
+  // Calculation context
+  int32 current_stock = 10;
+  double average_monthly_consumption = 11;
+  string consumption_trend = 12;  // 'INCREASING', 'STABLE', 'DECREASING'
+  
+  // Timestamps
+  int64 calculated_at = 13;
+  int64 valid_until = 14;
+}
+
+// Cold Chain Equipment telemetry
+message CCE_Telemetry {
+  string id = 1;
+  string cce_id = 2;
+  string facility_id = 3;
+  
+  // Temperature readings
+  double temp_celsius = 4;
+  double humidity_percent = 5;
+  
+  // Power status
+  int32 battery_level = 6;
+  string power_source = 7;  // 'BATTERY', 'GRID', 'SOLAR'
+  bool is_power_on = 8;
+  
+  // Physical status
+  bool lid_open = 9;
+  int32 lid_open_duration_seconds = 10;
+  
+  // Alerts
+  bool alert_triggered = 11;
+  string alert_type = 12;
+  string alert_message = 13;
+  
+  // RTM device info
+  string rtm_device_id = 14;
+  int32 signal_strength = 15;
+  
+  // Timestamp
+  int64 recorded_at = 16;
+  int64 synced_at = 17;
+}
+
+// User session
+message UserSession {
+  string id = 1;
+  string email = 2;
+  string name = 3;
+  UserRole role = 4;
+  string assigned_location_id = 5;
+  UserPermissions permissions = 6;
+  int64 last_login_at = 7;
+}
+
+// User permissions
+message UserPermissions {
+  bool can_view_national = 1;
+  bool can_view_state = 2;
+  bool can_view_lga = 3;
+  bool can_view_facility = 4;
+  bool can_edit_stock = 5;
+  bool can_edit_users = 6;
+  bool can_view_reports = 7;
+}
+
+// Map node for 3D visualization
+message MapNode {
+  string id = 1;
+  string label = 2;
+  string code = 3;
+  string state = 4;
+  string lga = 5;
+  GeoLocation geo = 6;
+  FacilityType node_type = 7;
+  bool has_cold_chain = 8;
+  bool has_rtm = 9;
+  StockStatus stock_status = 10;
+  int32 alert_count = 11;
+  int64 last_sync = 12;
+}
+
+// Transfer suggestion for redistribution
+message TransferSuggestion {
+  MessageSourceLGA source_lga = 1;
+  MessageTargetLGA target_lga = 2;
+  MessageVaccine vaccine = 3;
+  int32 suggested_quantity = 4;
+  MessageDistance distance = 5;
+  double confidence_score = 6;
+  repeated string risk_factors = 7;
+  repeated string benefits = 8;
+  string priority = 9;  // 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW'
+}
+
+// Helper messages for transfer suggestion
+message MessageSourceLGA {
+  string id = 1;
+  string name = 2;
+  int32 stock_level = 3;
+  double months_of_stock = 4;
+}
+
+message MessageTargetLGA {
+  string id = 1;
+  string name = 2;
+  int32 stock_level = 3;
+  double months_of_stock = 4;
+}
+
+message MessageVaccine {
+  string id = 1;
+  string name = 2;
+}
+
+message MessageDistance {
+  double km = 1;
+  int32 estimated_travel_time = 2;  // minutes
+}
+
+// ============================================
+// COLLECTIONS (for batch operations)
+// ============================================
+
+// Collection of stock snapshots
+message StockSnapshotCollection {
+  repeated StockSnapshot snapshots = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+// Collection of alerts
+message AlertCollection {
+  repeated Alert alerts = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+// Collection of map nodes
+message MapNodeCollection {
+  repeated MapNode nodes = 1;
+  int32 total_count = 2;
+  GeoLocation bounds_center = 3;
+  double bounds_radius = 4;  // For viewport
+}
+
+// Collection of locations
+message LocationCollection {
+  repeated Location locations = 1;
+  int32 total_count = 2;
+  string level = 3;  // 'zone', 'state', 'lga', 'facility'
+}
+
+// ============================================
+// API REQUEST/RESPONSE MESSAGES
+// ============================================
+
+// Stock data request
+message StockDataRequest {
+  string facility_id = 1;
+  string lga_id = 2;
+  string state_id = 3;
+  string vaccine_code = 4;
+  bool include_historical = 5;
+  int32 days_history = 6;
+}
+
+// Stock data response
+message StockDataResponse {
+  bool success = 1;
+  repeated StockSnapshot data = 2;
+  ResponseMeta meta = 3;
+  ErrorResponse error = 4;
+}
+
+// Generic response metadata
+message ResponseMeta {
+  int64 timestamp = 1;
+  string request_id = 2;
+  string version = 3;
+  bool cached = 4;
+  double response_time_ms = 5;
+}
+
+// Error response
+message ErrorResponse {
+  string code = 1;
+  string message = 2;
+  map<string, string> details = 3;
+}
+
+// ============================================
+// SYNC MESSAGES (for OpenLMIS integration)
+// ============================================
+
+// Webhook payload from OpenLMIS
+message WebhookPayload {
+  string event_type = 1;
+  int64 timestamp = 2;
+  string entity_id = 3;
+  string entity_type = 4;  // 'REQUISITION', 'STOCK_CARD', 'FACILITY', 'ORDER'
+  map<string, string> data = 5;
+  string signature = 6;
+}
+
+// Sync request for delta updates
+message SyncRequest {
+  int64 last_sync_timestamp = 1;
+  repeated string entity_types = 2;  // Which entities to sync
+  string lga_id = 3;  // Optional: sync specific LGA only
+  string state_id = 4;  // Optional: sync specific state only
+}
+
+// Sync response
+message SyncResponse {
+  bool success = 1;
+  repeated StockSnapshot stock_updates = 2;
+  repeated Alert new_alerts = 3;
+  repeated Requisition requisition_updates = 4;
+  int32 entities_synced = 5;
+  int64 next_sync_timestamp = 6;
+}
+
+// ============================================
+// FILTER AND PAGINATION
+// ============================================
+
+// Map filters
+message MapFilters {
+  string state = 1;
+  string lga = 2;
+  repeated FacilityType facility_types = 3;
+  repeated StockStatus stock_statuses = 4;
+  bool has_alerts = 5;
+}
+
+// Pagination request
+message PaginationRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  string sort_by = 3;
+  string sort_order = 4;  // 'asc' or 'desc'
+}
+
+// Pagination response
+message PaginationResponse {
+  int32 page = 1;
+  int32 page_size = 2;
+  int32 total_records = 3;
+  int32 total_pages = 4;
+  bool has_next = 5;
+  bool has_previous = 6;
+}

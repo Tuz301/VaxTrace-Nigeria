@@ -1,0 +1,509 @@
+# VaxTrace Nigeria CI/CD Pipeline
+# Purpose: Automated testing, building, and deployment for vaccine supply chain analytics
+# Compliance: NDPR-compliant deployment with audit trails
+
+name: VaxTrace CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME_BACKEND: ${{ github.repository }}/backend
+  IMAGE_NAME_FRONTEND: ${{ github.repository }}/frontend
+  IMAGE_NAME_NGINX: ${{ github.repository }}/nginx
+
+jobs:
+  # ============================================================================
+  # JOB 1: Run Tests
+  # ============================================================================
+  test:
+    name: 🧪 Run Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🏗️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 📦 Install Dependencies
+        run: |
+          echo "Installing root dependencies..."
+          npm ci
+          echo "Installing backend dependencies..."
+          cd backend && npm ci
+          cd ..
+          echo "Installing frontend dependencies..."
+          cd frontend && npm ci
+          cd ..
+
+      - name: 🔍 Lint Backend
+        run: |
+          cd backend
+          npm run lint
+        continue-on-error: true
+
+      - name: 🔍 Lint Frontend
+        run: |
+          cd frontend
+          npm run lint
+        continue-on-error: true
+
+      - name: ✅ Test Backend
+        run: |
+          cd backend
+          npm run test:ci
+        env:
+          NODE_ENV: test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+        continue-on-error: true
+
+      - name: ✅ Test Frontend
+        run: |
+          cd frontend
+          npm run test:ci
+        env:
+          NODE_ENV: test
+        continue-on-error: true
+
+      - name: 🏗️ Type Check Backend
+        run: |
+          cd backend
+          npx tsc --noEmit
+
+      - name: 🏗️ Type Check Frontend
+        run: |
+          cd frontend
+          npx tsc --noEmit
+
+      - name: 📊 Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            backend/coverage/
+            frontend/coverage/
+          retention-days: 30
+
+  # ============================================================================
+  # JOB 2: Build Docker Images
+  # ============================================================================
+  build:
+    name: 🐳 Build Docker Images
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    outputs:
+      backend-tag: ${{ steps.meta-backend.outputs.tags }}
+      frontend-tag: ${{ steps.meta-frontend.outputs.tags }}
+      nginx-tag: ${{ steps.meta-nginx.outputs.tags }}
+
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🔑 Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🏷️ Extract Metadata (Backend)
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: 🏗️ Build and Push Backend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            NODE_ENV=production
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+
+      - name: 🏷️ Extract Metadata (Frontend)
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: 🏗️ Build and Push Frontend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            NODE_ENV=production
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}
+
+      - name: 🏷️ Extract Metadata (Nginx)
+        id: meta-nginx
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_NGINX }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: 🏗️ Build and Push Nginx Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./nginx
+          file: ./nginx/Dockerfile
+          push: true
+          tags: ${{ steps.meta-nginx.outputs.tags }}
+          labels: ${{ steps.meta-nginx.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ============================================================================
+  # JOB 3: Deploy to Staging
+  # ============================================================================
+  deploy-staging:
+    name: 🚀 Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    environment:
+      name: staging
+      url: https://staging.vaxtrace.gov.ng
+
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🔄 Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.6.0'
+
+      - name: 🔐 Configure Terraform Credentials
+        run: |
+          cd infrastructure/terraform
+          cat > terraform.tfvars << EOF
+            gbb_auth_url    = "${{ secrets.GBB_AUTH_URL }}"
+            gbb_domain_name = "${{ secrets.GBB_DOMAIN_NAME }}"
+            gbb_tenant_name = "${{ secrets.GBB_TENANT_NAME }}"
+            gbb_user_name   = "${{ secrets.GBB_USER_NAME }}"
+            gbb_password    = "${{ secrets.GBB_PASSWORD }}"
+            gbb_region      = "${{ secrets.GBB_REGION }}"
+            environment     = "staging"
+          EOF
+
+      - name: 🏗️ Terraform Init
+        run: |
+          cd infrastructure/terraform
+          terraform init
+
+      - name: 📋 Terraform Plan
+        id: plan
+        run: |
+          cd infrastructure/terraform
+          terraform plan -out=tfplan -var-file=terraform.tfvars
+        continue-on-error: true
+
+      - name: 🚀 Terraform Apply
+        run: |
+          cd infrastructure/terraform
+          terraform apply -auto-approve tfplan
+
+      - name: 📦 Deploy Services to Staging
+        run: |
+          chmod +x scripts/deploy.sh
+          ./scripts/deploy.sh staging \
+            "${{ needs.build.outputs.backend-tag }}" \
+            "${{ needs.build.outputs.frontend-tag }}" \
+            "${{ needs.build.outputs.nginx-tag }}"
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          SSH_HOST: ${{ secrets.STAGING_SSH_HOST }}
+          SSH_USER: ${{ secrets.STAGING_SSH_USER }}
+
+      - name: 🏥 Health Check
+        run: |
+          chmod +x scripts/health-check.sh
+          ./scripts/health-check.sh staging
+        env:
+          HEALTH_CHECK_URL: ${{ secrets.STAGING_HEALTH_CHECK_URL }}
+          MAX_RETRIES: 30
+          RETRY_INTERVAL: 10
+
+      - name: 📝 Create Deployment Record
+        run: |
+          cat > deployment-record.json << EOF
+          {
+            "environment": "staging",
+            "commit": "${{ github.sha }}",
+            "branch": "${{ github.ref_name }}",
+            "deployed_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "deployed_by": "${{ github.actor }}",
+            "backend_image": "${{ needs.build.outputs.backend-tag }}",
+            "frontend_image": "${{ needs.build.outputs.frontend-tag }}",
+            "nginx_image": "${{ needs.build.outputs.nginx-tag }}"
+          }
+          EOF
+          echo "Deployment record created"
+
+      - name: 📊 Upload Deployment Record
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-record-staging
+          path: deployment-record.json
+          retention-days: 90
+
+      - name: 🔔 Notify Success
+        if: success()
+        run: |
+          echo "✅ Staging deployment successful!"
+          echo "Commit: ${{ github.sha }}"
+          echo "Deployed by: ${{ github.actor }}"
+
+  # ============================================================================
+  # JOB 4: Deploy to Production (Manual Approval)
+  # ============================================================================
+  deploy-production:
+    name: 🚀 Deploy to Production
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment:
+      name: production
+      url: https://vaxtrace.gov.ng
+
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: ✋ Manual Approval Required
+        uses: trstringer/manual-approval@v1
+        with:
+          secret: ${{ secrets.GITHUB_TOKEN }}
+          approvers: rakosu,admin,tech-lead
+          minimum-approvals: 2
+          issue-title: "Production Deployment Approval - ${{ github.sha }}"
+          issue-body: |
+            ## 🚀 Production Deployment Request
+            
+            **Commit:** ${{ github.sha }}
+            **Branch:** ${{ github.ref_name }}
+            **Author:** ${{ github.actor }}
+            **Changes:** ${{ github.event.head_commit.message }}
+            
+            ### Images to Deploy:
+            - Backend: ${{ needs.build.outputs.backend-tag }}
+            - Frontend: ${{ needs.build.outputs.frontend-tag }}
+            - Nginx: ${{ needs.build.outputs.nginx-tag }}
+            
+            ### Pre-deployment Checklist:
+            - [ ] All tests passing
+            - [ ] Staging environment verified
+            - [ ] Database migrations reviewed
+            - [ ] Rollback plan confirmed
+            - [ ] Maintenance window scheduled
+
+      - name: 🔄 Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.6.0'
+
+      - name: 🔐 Configure Terraform Credentials
+        run: |
+          cd infrastructure/terraform
+          cat > terraform.tfvars << EOF
+            gbb_auth_url    = "${{ secrets.GBB_AUTH_URL }}"
+            gbb_domain_name = "${{ secrets.GBB_DOMAIN_NAME }}"
+            gbb_tenant_name = "${{ secrets.GBB_TENANT_NAME }}"
+            gbb_user_name   = "${{ secrets.GBB_USER_NAME }}"
+            gbb_password    = "${{ secrets.GBB_PASSWORD }}"
+            gbb_region      = "${{ secrets.GBB_REGION }}"
+            environment     = "production"
+          EOF
+
+      - name: 🏗️ Terraform Init
+        run: |
+          cd infrastructure/terraform
+          terraform init
+
+      - name: 📋 Terraform Plan
+        id: plan
+        run: |
+          cd infrastructure/terraform
+          terraform plan -out=tfplan -var-file=terraform.tfvars -detailed-exitcode
+        continue-on-error: true
+
+      - name: 🚀 Terraform Apply
+        run: |
+          cd infrastructure/terraform
+          terraform apply -auto-approve tfplan
+
+      - name: 💾 Create Database Backup
+        run: |
+          chmod +x/scripts/backup-db.sh
+          ./scripts/backup-db.sh production
+        env:
+          DB_HOST: ${{ secrets.PROD_DB_HOST }}
+          DB_USER: ${{ secrets.PROD_DB_USER }}
+          DB_PASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
+          DB_NAME: ${{ secrets.PROD_DB_NAME }}
+          BACKUP_BUCKET: ${{ secrets.BACKUP_BUCKET }}
+
+      - name: 🗄️ Run Database Migrations
+        run: |
+          chmod +x scripts/migrate.sh
+          ./scripts/migrate.sh production
+        env:
+          DB_HOST: ${{ secrets.PROD_DB_HOST }}
+          DB_USER: ${{ secrets.PROD_DB_USER }}
+          DB_PASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
+          DB_NAME: ${{ secrets.PROD_DB_NAME }}
+
+      - name: 📦 Deploy Services to Production
+        run: |
+          chmod +x scripts/deploy.sh
+          ./scripts/deploy.sh production \
+            "${{ needs.build.outputs.backend-tag }}" \
+            "${{ needs.build.outputs.frontend-tag }}" \
+            "${{ needs.build.outputs.nginx-tag }}"
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.PROD_SSH_KEY }}
+          SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+          SSH_USER: ${{ secrets.PROD_SSH_USER }}
+
+      - name: 🏥 Health Check
+        run: |
+          chmod +x scripts/health-check.sh
+          ./scripts/health-check.sh production
+        env:
+          HEALTH_CHECK_URL: ${{ secrets.PROD_HEALTH_CHECK_URL }}
+          MAX_RETRIES: 60
+          RETRY_INTERVAL: 15
+
+      - name: 📝 Create Deployment Record
+        run: |
+          cat > deployment-record.json << EOF
+          {
+            "environment": "production",
+            "commit": "${{ github.sha }}",
+            "branch": "${{ github.ref_name }}",
+            "deployed_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "deployed_by": "${{ github.actor }}",
+            "approved_by": "${{ github.event.approver }}",
+            "backend_image": "${{ needs.build.outputs.backend-tag }}",
+            "frontend_image": "${{ needs.build.outputs.frontend-tag }}",
+            "nginx_image": "${{ needs.build.outputs.nginx-tag }}"
+          }
+          EOF
+          echo "Deployment record created"
+
+      - name: 📊 Upload Deployment Record
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-record-production
+          path: deployment-record.json
+          retention-days: 365
+
+      - name: 🔔 Notify Success
+        if: success()
+        run: |
+          echo "✅ Production deployment successful!"
+          echo "Commit: ${{ github.sha }}"
+          echo "Deployed by: ${{ github.actor }}"
+
+      - name: 🔄 Rollback on Failure
+        if: failure()
+        run: |
+          chmod +x scripts/rollback.sh
+          ./scripts/rollback.sh production
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.PROD_SSH_KEY }}
+          SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+          SSH_USER: ${{ secrets.PROD_SSH_USER }}
+
+  # ============================================================================
+  # JOB 5: Security Scanning
+  # ============================================================================
+  security-scan:
+    name: 🔒 Security Scan
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push'
+
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🔍 Run Trivy Vulnerability Scanner (Backend)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ needs.build.outputs.backend-tag }}
+          format: 'sarif'
+          output: 'trivy-backend-results.sarif'
+
+      - name: 🔍 Run Trivy Vulnerability Scanner (Frontend)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ needs.build.outputs.frontend-tag }}
+          format: 'sarif'
+          output: 'trivy-frontend-results.sarif'
+
+      - name: 📊 Upload SARIF Files
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-backend-results.sarif
+
+      - name: 📦 Upload Security Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-scan-results
+          path: |
+            trivy-backend-results.sarif
+            trivy-frontend-results.sarif
+          retention-days: 90

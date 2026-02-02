@@ -1,0 +1,115 @@
+# ============================================
+# VaxTrace Nigeria - Git Ignore Configuration
+# ============================================
+
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Environment Variables (CRITICAL: Never commit .env)
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+
+# Build Outputs
+dist/
+build/
+.next/
+out/
+.turbo/
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+coverage/
+*.lcov
+.nyc_output/
+
+# Logs
+logs/
+*.log
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+postgres-data/
+redis-data/
+
+# Temporary Files
+tmp/
+temp/
+*.tmp
+
+# OS Files
+Thumbs.db
+.DS_Store
+
+# Docker
+.dockerignore
+
+# Certificates & Keys (CRITICAL)
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+certs/
+keys/
+tls/
+
+# Backups
+*.bak
+*.backup
+backups/
+
+# Cache
+.cache/
+.parcel-cache/
+.eslintcache
+.stylelintcache
+
+# Misc
+*.pid
+*.seed
+*.pid.lock
+
+# TypeScript
+*.tsbuildinfo
+
+# PWA
+**/public/sw.js
+**/public/workbox-*.js
+**/public/worker-*.js
+**/public/sw.js.map
+**/public/workbox-*.js.map
+**/public/worker-*.js.map
+
+# Storybook
+storybook-static/
+
+# Velogen
+.vercel/
+.netlify/
+
+# Sentry
+.sentryclirc
+
+# Protobuf generated files
+*.pb.go
+*_pb2.py
+*_pb2.dart

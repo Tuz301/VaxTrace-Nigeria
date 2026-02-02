@@ -1,0 +1,132 @@
+version: '3.8'
+
+services:
+  # PostgreSQL with PostGIS for geospatial data and persistent storage
+  postgres:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: vaxtrace-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-vaxtrace_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-vaxtrace_nigeria}
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=en_NG.UTF-8"
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/database/migrations:/docker-entrypoint-initdb.d:ro
+    networks:
+      - vaxtrace_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vaxtrace_admin} -d ${POSTGRES_DB:-vaxtrace_nigeria}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: >
+      postgres
+      -c shared_preload_libraries='pg_stat_statements,pgcrypto'
+      -c pgcrypto.require='true'
+      -c max_connections=200
+      -c shared_buffers=256MB
+      -c effective_cache_size=1GB
+      -c maintenance_work_mem=64MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c work_mem=2621kB
+      -c min_wal_size=1GB
+      -c max_wal_size=4GB
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Redis for caching with TLS support
+  redis:
+    image: redis:7.2-alpine
+    container_name: vaxtrace-redis
+    restart: unless-stopped
+    command: >
+      sh -c "if [ -f /etc/redis/tls/redis.crt ]; then redis-server --requirepass ${REDIS_PASSWORD} --tls-port 6380 --port 6379 --tls-cert-file /etc/redis/tls/redis.crt --tls-key-file /etc/redis/tls/redis.key --tls-ca-cert-file /etc/redis/tls/ca.crt --tls-auth-clients no --maxmemory 512mb --maxmemory-policy allkeys-lru --save 900 1 --save 300 10 --save 60 10000 --appendonly yes --appendfsync everysec; else redis-server --requirepass ${REDIS_PASSWORD} --port 6379 --maxmemory 512mb --maxmemory-policy allkeys-lru --save 900 1 --save 300 10 --save 60 10000 --appendonly yes --appendfsync everysec; fi"
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+      - "${REDIS_TLS_PORT:-6380}:6380"
+    volumes:
+      - redis_data:/data
+      - ./backend/config/redis/tls:/etc/redis/tls:ro
+    networks:
+      - vaxtrace_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # pgAdmin for database management (optional, for development)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: vaxtrace-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@vaxtrace.ng}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - vaxtrace_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - development
+
+  # Redis Commander for Redis management (optional, for development)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: vaxtrace-redis-commander
+    restart: unless-stopped
+    environment:
+      REDIS_HOSTS: local:redis:6379:0:${REDIS_PASSWORD}
+    ports:
+      - "${REDIS_COMMANDER_PORT:-8081}:8081"
+    networks:
+      - vaxtrace_network
+    depends_on:
+      redis:
+        condition: service_healthy
+    profiles:
+      - development
+
+networks:
+  vaxtrace_network:
+    driver: bridge
+    name: vaxtrace_network
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  postgres_data:
+    name: vaxtrace_postgres_data
+    driver: local
+  redis_data:
+    name: vaxtrace_redis_data
+    driver: local
+  pgadmin_data:
+    name: vaxtrace_pgadmin_data
+    driver: local
