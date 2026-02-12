@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import { VaxTraceProviders } from './providers';
 import './globals.css';
-import './sentry';
+import * as Sentry from '@sentry/nextjs';
 import { initPostHog } from '@/lib/posthog';
 
 // Initialize PostHog analytics
