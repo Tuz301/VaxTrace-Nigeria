@@ -135,6 +135,20 @@ export function getExpiryRisk(expiryDate: string | Date): 'CRITICAL' | 'HIGH' | 
 }
 
 /**
+ * Get expiry risk color class
+ */
+export function getExpiryRiskColor(expiryDate: string | Date): string {
+  const risk = getExpiryRisk(expiryDate);
+  switch (risk) {
+    case 'CRITICAL': return 'text-rose-400';
+    case 'HIGH': return 'text-amber-400';
+    case 'MEDIUM': return 'text-yellow-400';
+    case 'LOW': return 'text-emerald-400';
+    default: return 'text-slate-400';
+  }
+}
+
+/**
  * Debounce function
  */
 export function debounce<T extends (...args: any[]) => any>(
@@ -268,8 +282,8 @@ export function getApiBaseUrl(): string {
       return window.location.origin;
     }
   }
-  // In development, use the API_URL from env or default to localhost:3001
-  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+  // In development, use the API_URL from env or default to localhost:8000 (backend)
+  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 }
 
 /**

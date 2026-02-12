@@ -1,5 +1,5 @@
-import { Controller, Post, Body, Logger, HttpCode, HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Controller, Post, Body, Logger, HttpCode, HttpStatus, Headers, UnauthorizedException } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiHeader } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { WebhookService } from './webhook.service';
 
@@ -10,6 +10,15 @@ interface OpenLMISWebhook {
   data: any;
   timestamp: string;
 }
+
+/**
+ * VaxTrace Nigeria - Webhook Controller (FIXED)
+ *
+ * FIX #9: Webhook Signature Verification Enforcement
+ * - Signature verification is now mandatory
+ * - Invalid signatures are rejected immediately
+ * - Added proper error responses
+ */
 
 @ApiTags('Webhooks')
 @Controller('webhooks')
@@ -24,32 +33,40 @@ export class WebhookController {
   @Post('openlmis')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Receive webhook from OpenLMIS' })
+  @ApiHeader({ name: 'x-openlmis-signature', description: 'HMAC signature', required: true })
   @ApiResponse({ status: 200, description: 'Webhook received successfully' })
   @ApiResponse({ status: 400, description: 'Invalid webhook payload' })
   @ApiResponse({ status: 401, description: 'Invalid signature' })
-  async handleOpenLMISWebhook(@Body() payload: OpenLMISWebhook) {
+  async handleOpenLMISWebhook(
+    @Body() payload: OpenLMISWebhook,
+    @Headers() headers: Record<string, string>
+  ) {
     this.logger.log(`Received OpenLMIS webhook: ${payload.eventType}`);
 
-    // Verify signature if secret is configured
-    const signature = this.configService.get<string>('WEBHOOK_SIGNATURE');
-    if (signature) {
-      const isValid = this.webhookService.verifySignature(
-        JSON.stringify(payload),
-        signature
-      );
-      
-      if (!isValid) {
-        this.logger.warn('Invalid webhook signature');
-        throw new Error('Invalid signature');
-      }
+    // FIX #9: Enforce signature verification (MANDATORY)
+    const signature = headers['x-openlmis-signature'] || headers['X-OpenLMIS-Signature'];
+    
+    if (!signature) {
+      this.logger.error('Missing webhook signature');
+      throw new UnauthorizedException('Missing signature header');
     }
 
-    // Process the webhook
+    const isValid = this.webhookService.verifySignature(
+      JSON.stringify(payload),
+      signature
+    );
+    
+    if (!isValid) {
+      this.logger.error('Invalid webhook signature - rejecting request');
+      throw new UnauthorizedException('Invalid webhook signature');
+    }
+
+    // Process the webhook (queued for async processing)
     await this.webhookService.processEvent(payload);
 
     return {
       success: true,
-      message: 'Webhook processed successfully',
+      message: 'Webhook queued for processing',
       timestamp: new Date().toISOString(),
     };
   }

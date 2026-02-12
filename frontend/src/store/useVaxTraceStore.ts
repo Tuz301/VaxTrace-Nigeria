@@ -41,7 +41,7 @@ export interface VaxTraceStockData {
   vvmStatus: 'HEALTHY' | 'WARNING' | 'CRITICAL';
   monthsOfStock: number;
   lastUpdated: string;
-  stockStatus: 'CRITICAL' | 'LOW' | 'ADEQUATE' | 'OVERSTOCKED';
+  stockStatus: 'OPTIMAL' | 'UNDERSTOCKED' | 'STOCKOUT' | 'OVERSTOCKED';
 }
 
 export interface VaxTraceAlert {
@@ -66,7 +66,7 @@ export type AlertType =
   | 'power_outage'
   | 'delivery_delay';
 
-export type AlertSeverity = 'low' | 'medium' | 'high' | 'critical';
+export type AlertSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
 export interface MapNode {
   id: string;
@@ -172,6 +172,7 @@ interface VaxTraceState {
   stockDataLoading: boolean;
   stockDataError: string | null;
   lastStockUpdate: Date | null;
+  lastETag: string | null; // FIX #2: ETag for conditional requests
 
   // Alerts
   alerts: VaxTraceAlert[];
@@ -217,7 +218,7 @@ interface VaxTraceActions {
   setStockData: (data: VaxTraceStockData[]) => void;
   updateStockItem: (id: string, updates: Partial<VaxTraceStockData>) => void;
   clearStockData: () => void;
-  fetchStockData: () => Promise<void>;
+  fetchStockData: (retryCount?: number) => Promise<void>;
 
   // Alert Actions
   setAlerts: (alerts: VaxTraceAlert[]) => void;
@@ -225,7 +226,7 @@ interface VaxTraceActions {
   dismissAlert: (alertId: string) => void;
   resolveAlert: (alertId: string) => void;
   clearAlerts: () => void;
-  fetchAlerts: () => Promise<void>;
+  fetchAlerts: (retryCount?: number) => Promise<void>;
 
   // Map Actions
   setMapNodes: (nodes: MapNode[]) => void;
@@ -264,6 +265,7 @@ const initialState: VaxTraceState = {
   stockDataLoading: false,
   stockDataError: null,
   lastStockUpdate: null,
+  lastETag: null, // FIX #2: ETag for conditional requests
 
   alerts: [],
   alertsLoading: false,
@@ -470,26 +472,93 @@ export const useVaxTraceStore = create<VaxTraceState & VaxTraceActions>()(
             selectedTimeRange: range,
           }),
 
-        // Fetch Methods
-        fetchStockData: async () => {
-          set({ stockDataLoading: true });
+        // Fetch Methods (FIXED - Issue #2: Frontend State Desynchronization)
+        fetchStockData: async (retryCount = 0) => {
+          set({ stockDataLoading: true, stockDataError: null });
+          
           try {
-            const response = await fetch('/api/stock');
+            const state = get();
+            const headers: HeadersInit = {
+              'Content-Type': 'application/json',
+            };
+            
+            // FIX #2: Add ETag/If-None-Match support for conditional requests
+            if (state.lastETag) {
+              headers['If-None-Match'] = state.lastETag;
+            }
+            
+            const response = await fetch('/api/stock', {
+              headers,
+            });
+            
+            // FIX #2: Handle 304 Not Modified
+            if (response.status === 304) {
+              set({ stockDataLoading: false });
+              return;
+            }
+            
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
             const json = await response.json();
-            set({ stockData: json.data || [], stockDataLoading: false, lastStockUpdate: new Date() });
+            const etag = response.headers.get('ETag');
+            
+            set({
+              stockData: json.data || [],
+              stockDataLoading: false,
+              lastStockUpdate: new Date(),
+              lastETag: etag || null,
+            });
           } catch (error) {
-            set({ stockDataLoading: false, stockDataError: 'Failed to fetch stock data' });
+            // FIX #2: Retry with exponential backoff
+            if (retryCount < 3) {
+              const delay = 1000 * Math.pow(2, retryCount);
+              setTimeout(() => {
+                const actions = get();
+                actions.fetchStockData(retryCount + 1);
+              }, delay);
+              return;
+            }
+            
+            set({
+              stockDataLoading: false,
+              stockDataError: 'Failed to fetch stock data after retries'
+            });
           }
         },
 
-        fetchAlerts: async () => {
-          set({ alertsLoading: true });
+        fetchAlerts: async (retryCount = 0) => {
+          set({ alertsLoading: true, alertsError: null });
+          
           try {
-            const response = await fetch('/api/alerts');
+            const response = await fetch('/api/alerts', {
+              headers: {
+                'Content-Type': 'application/json',
+              },
+            });
+            
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
             const json = await response.json();
             set({ alerts: json.data || [], alertsLoading: false });
           } catch (error) {
-            set({ alertsLoading: false, alertsError: 'Failed to fetch alerts' });
+            // FIX #2: Retry with exponential backoff
+            if (retryCount < 3) {
+              const delay = 1000 * Math.pow(2, retryCount);
+              setTimeout(() => {
+                const actions = get();
+                actions.fetchAlerts(retryCount + 1);
+              }, delay);
+              return;
+            }
+            
+            set({
+              alertsLoading: false,
+              alertsError: 'Failed to fetch alerts after retries'
+            });
           }
         },
       }),
@@ -518,16 +587,16 @@ export const useVaxTraceStore = create<VaxTraceState & VaxTraceActions>()(
  * Get critical alerts only
  */
 export const selectCriticalAlerts = (state: VaxTraceState) =>
-  state.alerts.filter((a) => a.severity === 'critical' && !a.isResolved);
+  state.alerts.filter((a) => a.severity === 'CRITICAL' && !a.isResolved);
 
 /**
  * Get alerts count by severity
  */
 export const selectAlertsCount = (state: VaxTraceState) => ({
-  critical: state.alerts.filter((a) => a.severity === 'critical' && !a.isResolved).length,
-  high: state.alerts.filter((a) => a.severity === 'high' && !a.isResolved).length,
-  medium: state.alerts.filter((a) => a.severity === 'medium' && !a.isResolved).length,
-  low: state.alerts.filter((a) => a.severity === 'low' && !a.isResolved).length,
+  critical: state.alerts.filter((a) => a.severity === 'CRITICAL' && !a.isResolved).length,
+  high: state.alerts.filter((a) => a.severity === 'HIGH' && !a.isResolved).length,
+  medium: state.alerts.filter((a) => a.severity === 'MEDIUM' && !a.isResolved).length,
+  low: state.alerts.filter((a) => a.severity === 'LOW' && !a.isResolved).length,
 });
 
 /**
@@ -545,7 +614,8 @@ export const selectFilteredStockData = (state: VaxTraceState) => {
   }
 
   if (state.mapFilters.stockStatus && state.mapFilters.stockStatus.length > 0) {
-    data = data.filter((item) => state.mapFilters.stockStatus!.includes(item.vvmStatus));
+    // FIX #7: Filter by stockStatus field, not vvmStatus
+    data = data.filter((item) => state.mapFilters.stockStatus!.includes(item.stockStatus));
   }
 
   return data;

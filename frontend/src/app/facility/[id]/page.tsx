@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useVaxTraceStore } from '@/store/useVaxTraceStore';
+import { useMapContext } from '@/contexts/MapContext';
+import { FacilityViewMap } from '@/components/map/LocationMap';
 import {
   ArrowLeft,
   MapPin,
@@ -17,7 +19,7 @@ import {
   User,
   Calendar,
 } from 'lucide-react';
-import { formatDate, formatDateTime, getStockStatusColor, getVVMStageColor, getExpiryRisk } from '@/lib/utils';
+import { formatDate, formatDateTime, getStockStatusColor, getVVMStageColor, getExpiryRisk, getExpiryRiskColor } from '@/lib/utils';
 
 interface FacilityDetail {
   id: string;
@@ -70,6 +72,7 @@ export default function FacilityDetailPage() {
   const router = useRouter();
   const facilityId = params.id as string;
   const { userSession } = useVaxTraceStore();
+  const { selectFacility } = useMapContext();
   const [facility, setFacility] = useState<FacilityDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -79,8 +82,11 @@ export default function FacilityDetailPage() {
       return;
     }
 
+    // Select the facility in the map context
+    selectFacility(facilityId);
+
     fetchFacilityDetail();
-  }, [facilityId, userSession]);
+  }, [facilityId, userSession, selectFacility]);
 
   const fetchFacilityDetail = async () => {
     setIsLoading(true);
@@ -221,128 +227,206 @@ export default function FacilityDetailPage() {
         <div className="max-w-[1920px] mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Link
-              href="/dashboard"
+              href={`/lga/${facility.lga.toLowerCase().replace(/\s+/g, '-')}`}
               className="p-2 hover:bg-slate-800 rounded-lg transition-colors"
             >
               <ArrowLeft className="w-5 h-5 text-slate-400" />
             </Link>
             <div>
               <h1 className="text-lg font-semibold text-white">{facility.name}</h1>
-              <p className="text-xs text-slate-500">{facility.code}</p>
+              <p className="text-xs text-slate-500">{facility.code} • {facility.type}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-slate-400">{facility.type}</span>
-            <span className="text-slate-600">•</span>
-            <span className="text-sm text-slate-400">{facility.state}</span>
+          <div className="flex items-center gap-2 text-sm text-slate-400">
+            <MapPin className="w-4 h-4" />
+            {facility.lga}, {facility.state}
           </div>
         </div>
       </header>
 
       <main className="max-w-[1920px] mx-auto p-4 space-y-4">
-        {/* Facility Information */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2 bg-slate-900/50 border border-slate-800 rounded-lg p-6">
-            <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-              <MapPin className="w-5 h-5 text-emerald-400" />
-              Facility Information
-            </h2>
-            <div className="grid grid-cols-2 gap-4">
+        {/* Facility Info Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Location Info */}
+          <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4">
+            <h3 className="text-sm font-semibold text-slate-400 mb-3 flex items-center gap-2">
+              <MapPin className="w-4 h-4" />
+              Location
+            </h3>
+            <div className="space-y-2">
               <div>
-                <p className="text-xs text-slate-500 mb-1">State</p>
-                <p className="text-sm text-white">{facility.state}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 mb-1">LGA</p>
-                <p className="text-sm text-white">{facility.lga}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 mb-1">Ward</p>
-                <p className="text-sm text-white">{facility.ward}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 mb-1">Address</p>
+                <p className="text-xs text-slate-500">Address</p>
                 <p className="text-sm text-white">{facility.address}</p>
               </div>
               <div>
-                <p className="text-xs text-slate-500 mb-1">Phone</p>
-                <p className="text-sm text-white flex items-center gap-2">
-                  <Phone className="w-3 h-3" />
-                  {facility.phone}
-                </p>
+                <p className="text-xs text-slate-500">Ward</p>
+                <p className="text-sm text-white">{facility.ward}</p>
               </div>
               <div>
-                <p className="text-xs text-slate-500 mb-1">Email</p>
+                <p className="text-xs text-slate-500">LGA</p>
+                <p className="text-sm text-white">{facility.lga}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">State</p>
+                <p className="text-sm text-white">{facility.state}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Contact Info */}
+          <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4">
+            <h3 className="text-sm font-semibold text-slate-400 mb-3 flex items-center gap-2">
+              <Phone className="w-4 h-4" />
+              Contact
+            </h3>
+            <div className="space-y-2">
+              <div>
+                <p className="text-xs text-slate-500">Phone</p>
+                <p className="text-sm text-white">{facility.phone}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Email</p>
                 <p className="text-sm text-white">{facility.email}</p>
               </div>
               <div>
-                <p className="text-xs text-slate-500 mb-1">In Charge</p>
-                <p className="text-sm text-white flex items-center gap-2">
-                  <User className="w-3 h-3" />
-                  {facility.inCharge}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 mb-1">Catchment Population</p>
-                <p className="text-sm text-white">{facility.catchmentPopulation.toLocaleString()}</p>
+                <p className="text-xs text-slate-500">In Charge</p>
+                <p className="text-sm text-white">{facility.inCharge}</p>
               </div>
             </div>
           </div>
 
           {/* Infrastructure */}
-          <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-6">
-            <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-              <Activity className="w-5 h-5 text-cyan-400" />
+          <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4">
+            <h3 className="text-sm font-semibold text-slate-400 mb-3 flex items-center gap-2">
+              <Activity className="w-4 h-4" />
               Infrastructure
-            </h2>
-            <div className="space-y-3">
+            </h3>
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-400">Cold Chain Equipment</span>
-                <span
-                  className={`text-xs px-2 py-1 rounded ${
-                    facility.hasColdChain ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
-                  }`}
-                >
+                <span className="text-xs text-slate-500">Cold Chain</span>
+                <span className={`text-sm font-medium ${facility.hasColdChain ? 'text-emerald-400' : 'text-rose-400'}`}>
                   {facility.hasColdChain ? 'Available' : 'Not Available'}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-400">Generator</span>
-                <span
-                  className={`text-xs px-2 py-1 rounded ${
-                    facility.hasGenerator ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
-                  }`}
-                >
+                <span className="text-xs text-slate-500">Generator</span>
+                <span className={`text-sm font-medium ${facility.hasGenerator ? 'text-emerald-400' : 'text-rose-400'}`}>
                   {facility.hasGenerator ? 'Available' : 'Not Available'}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-400">Solar Power</span>
-                <span
-                  className={`text-xs px-2 py-1 rounded ${
-                    facility.hasSolar ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
-                  }`}
-                >
+                <span className="text-xs text-slate-500">Solar</span>
+                <span className={`text-sm font-medium ${facility.hasSolar ? 'text-emerald-400' : 'text-rose-400'}`}>
                   {facility.hasSolar ? 'Available' : 'Not Available'}
                 </span>
               </div>
+              <div>
+                <p className="text-xs text-slate-500">Catchment Population</p>
+                <p className="text-sm text-white">{facility.catchmentPopulation.toLocaleString()}</p>
+              </div>
             </div>
+          </div>
 
-            {/* Coordinates */}
-            <div className="mt-4 pt-4 border-t border-slate-800">
-              <p className="text-xs text-slate-500 mb-2">Coordinates</p>
-              <p className="text-sm text-slate-300">
-                {facility.latitude.toFixed(4)}, {facility.longitude.toFixed(4)}
-              </p>
+          {/* Active Alerts */}
+          <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4">
+            <h3 className="text-sm font-semibold text-slate-400 mb-3 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" />
+              Active Alerts
+            </h3>
+            <div className="space-y-2">
+              {facility.alerts.map((alert) => (
+                <div
+                  key={alert.id}
+                  className={`p-2 rounded border ${
+                    alert.severity === 'CRITICAL'
+                      ? 'bg-rose-500/10 border-rose-500/30'
+                      : 'bg-amber-500/10 border-amber-500/30'
+                  }`}
+                >
+                  <p className="text-xs text-white">{alert.message}</p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {formatDate(alert.createdAt)}
+                  </p>
+                </div>
+              ))}
             </div>
           </div>
         </div>
 
-        {/* Stock Data */}
-        <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Map */}
+          <div className="lg:col-span-2">
+            <div className="bg-slate-900/50 border border-slate-800 rounded-lg overflow-hidden">
+              <div className="p-4 border-b border-slate-800">
+                <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                  <MapPin className="w-5 h-5 text-cyan-400" />
+                  Location Map
+                </h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  {facility.address}
+                </p>
+              </div>
+              <FacilityViewMap height="300px" className="w-full" />
+            </div>
+          </div>
+
+          {/* Cold Chain Equipment */}
+          <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4">
+            <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+              <Thermometer className="w-5 h-5 text-cyan-400" />
+              Cold Chain Equipment
+            </h2>
+            <div className="space-y-3">
+              {facility.cceData.map((cce, index) => (
+                <div
+                  key={index}
+                  className="bg-slate-800/50 border border-slate-700 rounded-lg p-3"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm font-medium text-white">{cce.equipmentType}</p>
+                    <span
+                      className={`px-2 py-1 rounded text-xs font-medium ${
+                        cce.status === 'OPERATIONAL'
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                          : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                      }`}
+                    >
+                      {cce.status}
+                    </span>
+                  </div>
+                  <div className="space-y-1 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Model</span>
+                      <span className="text-white">{cce.model}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Serial No.</span>
+                      <span className="text-white">{cce.serialNumber}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Current Temp</span>
+                      <span className="text-white">{cce.currentTemp}°C</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Range</span>
+                      <span className="text-white">{cce.minTemp}°C - {cce.maxTemp}°C</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Last Maintenance</span>
+                      <span className="text-white">{formatDate(cce.lastMaintenance)}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Stock Data Table */}
+        <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4">
           <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-            <Package className="w-5 h-5 text-emerald-400" />
-            Stock Status
+            <Package className="w-5 h-5 text-cyan-400" />
+            Vaccine Stock Levels
           </h2>
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -351,164 +435,57 @@ export default function FacilityDetailPage() {
                   <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">Product</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">Status</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">Quantity</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">MOS</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">Expiry</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">MoS</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">VVM</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">Expiry</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">Batch</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-800">
                 {facility.stockData.map((stock, index) => (
-                  <tr key={index} className="border-b border-slate-800/50 hover:bg-slate-800/30">
-                    <td className="px-4 py-3 text-sm text-white">{stock.productName}</td>
+                  <tr key={index} className="hover:bg-slate-800/50 transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="text-sm font-medium text-white">{stock.productName}</div>
+                    </td>
                     <td className="px-4 py-3">
                       <span
-                        className={`text-xs px-2 py-1 rounded border ${getStockStatusColor(stock.stockStatus)}`}
+                        className={`px-2 py-1 rounded text-xs font-medium border ${getStockStatusColor(
+                          stock.stockStatus
+                        )}`}
                       >
                         {stock.stockStatus}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-white">{stock.quantity}</td>
-                    <td className="px-4 py-3 text-sm text-white">{stock.mos.toFixed(1)} months</td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-white">{formatDate(stock.expiryDate)}</span>
-                        <span
-                          className={`text-xs px-2 py-0.5 rounded ${
-                            getExpiryRisk(stock.expiryDate) === 'CRITICAL'
-                              ? 'bg-rose-500/20 text-rose-400'
-                              : getExpiryRisk(stock.expiryDate) === 'HIGH'
-                              ? 'bg-amber-500/20 text-amber-400'
-                              : 'bg-emerald-500/20 text-emerald-400'
-                          }`}
-                        >
-                          {getExpiryRisk(stock.expiryDate)}
-                        </span>
-                      </div>
+                      <div className="text-sm text-white">{stock.quantity} doses</div>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-1 rounded border ${getVVMStageColor(stock.vvmStage)}`}>
+                      <div className="text-sm text-white">{stock.mos} months</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`px-2 py-1 rounded text-xs font-medium border ${getVVMStageColor(
+                          stock.vvmStage
+                        )}`}
+                      >
                         Stage {stock.vvmStage}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-slate-400">{stock.batchNumber}</td>
+                    <td className="px-4 py-3">
+                      <div className="text-sm text-white">{formatDate(stock.expiryDate)}</div>
+                      <div className={`text-xs ${getExpiryRiskColor(stock.expiryDate)}`}>
+                        {getExpiryRisk(stock.expiryDate) === 'CRITICAL' ? 'Expiring Soon' :
+                         getExpiryRisk(stock.expiryDate) === 'HIGH' ? 'Check Expiry' : 'OK'}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="text-sm text-slate-300">{stock.batchNumber}</div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </div>
-
-        {/* Cold Chain Equipment */}
-        <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-6">
-          <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-            <Thermometer className="w-5 h-5 text-cyan-400" />
-            Cold Chain Equipment
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {facility.cceData.map((cce, index) => (
-              <div key={index} className="bg-slate-800/50 border border-slate-700 rounded-lg p-4">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <h3 className="text-sm font-medium text-white">{cce.equipmentType}</h3>
-                    <p className="text-xs text-slate-500">{cce.model}</p>
-                  </div>
-                  <span
-                    className={`text-xs px-2 py-1 rounded ${
-                      cce.status === 'OPERATIONAL'
-                        ? 'bg-emerald-500/20 text-emerald-400'
-                        : 'bg-rose-500/20 text-rose-400'
-                    }`}
-                  >
-                    {cce.status}
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-slate-500">Serial Number</span>
-                    <span className="text-xs text-slate-300">{cce.serialNumber}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-slate-500">Current Temperature</span>
-                    <span
-                      className={`text-xs font-medium ${
-                        cce.currentTemp >= cce.minTemp && cce.currentTemp <= cce.maxTemp
-                          ? 'text-emerald-400'
-                          : 'text-rose-400'
-                      }`}
-                    >
-                      {cce.currentTemp}°C
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-slate-500">Safe Range</span>
-                    <span className="text-xs text-slate-300">
-                      {cce.minTemp}°C - {cce.maxTemp}°C
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-slate-500">Last Maintenance</span>
-                    <span className="text-xs text-slate-300">{formatDate(cce.lastMaintenance)}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Active Alerts */}
-        {facility.alerts.length > 0 && (
-          <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-6">
-            <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-rose-400" />
-              Active Alerts
-            </h2>
-            <div className="space-y-3">
-              {facility.alerts.map((alert) => (
-                <div
-                  key={alert.id}
-                  className={`border rounded-lg p-4 ${
-                    alert.severity === 'CRITICAL'
-                      ? 'border-rose-500/30 bg-rose-500/5'
-                      : alert.severity === 'HIGH'
-                      ? 'border-amber-500/30 bg-amber-500/5'
-                      : 'border-slate-700 bg-slate-800/50'
-                  }`}
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <span className="text-xs px-2 py-1 rounded bg-slate-700 text-slate-300">{alert.type}</span>
-                    <span className="text-xs text-slate-500">{formatDateTime(alert.createdAt)}</span>
-                  </div>
-                  <p className="text-sm text-white">{alert.message}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Action Buttons */}
-        <div className="flex flex-wrap gap-3">
-          <Link
-            href={`/facility/${facilityId}/requisition`}
-            className="px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors flex items-center gap-2"
-          >
-            <Truck className="w-4 h-4" />
-            Create Requisition
-          </Link>
-          <Link
-            href={`/facility/${facilityId}/transfer`}
-            className="px-4 py-2 bg-cyan-500 text-white rounded-lg hover:bg-cyan-600 transition-colors flex items-center gap-2"
-          >
-            <Package className="w-4 h-4" />
-            Request Transfer
-          </Link>
-          <Link
-            href={`/facility/${facilityId}/history`}
-            className="px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 transition-colors flex items-center gap-2"
-          >
-            <Clock className="w-4 h-4" />
-            View History
-          </Link>
         </div>
       </main>
     </div>

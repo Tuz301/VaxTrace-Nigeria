@@ -45,7 +45,7 @@ interface StockLevel {
   longitude: number;
 }
 
-interface TransferSuggestion {
+export interface TransferSuggestion {
   sourceLGA: {
     id: string;
     name: string;

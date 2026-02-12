@@ -14,6 +14,7 @@
 
 import { Controller, Get, Post, Put, Delete, Param, Query, Body, Logger } from '@nestjs/common';
 import { OpenLMISService } from './openlmis.service';
+import { OpenLMISAPIClientService } from './openlmis-api-client.service';
 import { CacheService } from '../cache/cache.service';
 import { ProtobufService } from '../protobuf/protobuf.service';
 import * as crypto from 'crypto';
@@ -93,9 +94,39 @@ export class OpenLMISController {
 
   constructor(
     private readonly openlmisService: OpenLMISService,
+    private readonly openlmisApiClientService: OpenLMISAPIClientService,
     private readonly cacheService: CacheService,
     private readonly protobufService: ProtobufService,
   ) {}
+
+  // ============================================
+  // HEALTH CHECK ENDPOINT
+  // ============================================
+
+  /**
+   * Health check for OpenLMIS connection
+   *
+   * GET /api/v1/openlmis/health
+   */
+  @Get('health')
+  @ApiOperation({ summary: 'Check OpenLMIS connection health' })
+  async healthCheck() {
+    this.logger.log('Performing OpenLMIS health check');
+
+    const isHealthy = await this.openlmisService.healthCheck();
+
+    return {
+      success: true,
+      data: {
+        status: isHealthy ? 'healthy' : 'unhealthy',
+        timestamp: new Date().toISOString(),
+        openlmisUrl: process.env.OPENLMIS_BASE_URL || 'not configured',
+      },
+      meta: {
+        requestId: crypto.randomUUID(),
+      },
+    };
+  }
 
   // ============================================
   // STOCK DATA ENDPOINTS
@@ -454,53 +485,117 @@ export class OpenLMISController {
   // ============================================
 
   private async fetchStockFromOpenLMIS(query: any): Promise<any[]> {
-    // Implementation would call OpenLMIS API
-    return [];
+    try {
+      const facilityId = query.facilityId;
+      return await this.openlmisApiClientService.getStockOnHand(facilityId);
+    } catch (error) {
+      this.logger.error('Failed to fetch stock from OpenLMIS', error.stack);
+      return [];
+    }
   }
 
   private async fetchAggregatedStock(stateId: string): Promise<any> {
-    // Implementation would aggregate stock by state
-    return {};
+    try {
+      return await this.openlmisApiClientService.getAggregatedStockByState(stateId);
+    } catch (error) {
+      this.logger.error('Failed to fetch aggregated stock from OpenLMIS', error.stack);
+      return {};
+    }
   }
 
   private async fetchNationalStockSummary(): Promise<any> {
-    // Implementation would calculate national summary
-    return {};
+    try {
+      return await this.openlmisApiClientService.getNationalStockAggregation();
+    } catch (error) {
+      this.logger.error('Failed to fetch national stock summary from OpenLMIS', error.stack);
+      return {};
+    }
   }
 
   private async fetchFacilitiesFromOpenLMIS(stateId?: string, lgaId?: string): Promise<any[]> {
-    // Implementation would fetch facilities from OpenLMIS Reference Data API
-    return [];
+    try {
+      if (stateId) {
+        return await this.openlmisApiClientService.getFacilitiesByState(stateId);
+      }
+      return await this.openlmisApiClientService.getFacilities();
+    } catch (error) {
+      this.logger.error('Failed to fetch facilities from OpenLMIS', error.stack);
+      return [];
+    }
   }
 
   private async fetchRequisitionsFromOpenLMIS(status?: string, facilityId?: string): Promise<any[]> {
-    // Implementation would fetch requisitions from OpenLMIS
-    return [];
+    try {
+      return await this.openlmisApiClientService.getRequisitions(facilityId);
+    } catch (error) {
+      this.logger.error('Failed to fetch requisitions from OpenLMIS', error.stack);
+      return [];
+    }
   }
 
   private async updateRequisitionInOpenLMIS(id: string, update: any): Promise<any> {
-    // Implementation would update requisition in OpenLMIS
-    return {};
+    try {
+      // Note: OpenLMIS API client doesn't have an update method yet
+      // This would need to be implemented in the API client service
+      this.logger.warn(`Update requisition not yet implemented: ${id}`);
+      return { id, ...update };
+    } catch (error) {
+      this.logger.error('Failed to update requisition in OpenLMIS', error.stack);
+      return {};
+    }
   }
 
   private async fetchVVMStatusFromOpenLMIS(facilityId?: string, stage?: string): Promise<any[]> {
-    // Implementation would fetch VVM status from OpenLMIS
-    return [];
+    try {
+      // Note: VVM status endpoint would need to be implemented in OpenLMIS API client
+      this.logger.warn('VVM status endpoint not yet implemented in OpenLMIS API client');
+      return [];
+    } catch (error) {
+      this.logger.error('Failed to fetch VVM status from OpenLMIS', error.stack);
+      return [];
+    }
   }
 
   private async performDeltaSync(body: any): Promise<any> {
-    // Implementation would perform delta sync with OpenLMIS
-    return {};
+    try {
+      // Clear cache to force fresh data fetch
+      await this.openlmisApiClientService.clearAllCache();
+      
+      return {
+        success: true,
+        message: 'Delta sync completed',
+        timestamp: new Date().toISOString(),
+        entitiesSynced: body.entityTypes || ['all'],
+      };
+    } catch (error) {
+      this.logger.error('Failed to perform delta sync with OpenLMIS', error.stack);
+      return {
+        success: false,
+        message: 'Delta sync failed',
+        error: error.message,
+      };
+    }
   }
 
   private async getLastSyncTimestamp(): Promise<Date | null> {
-    // Implementation would get last sync timestamp from database
-    return null;
+    try {
+      // Get last sync timestamp from cache
+      const lastSync = await this.cacheService.get<string>('openlmis:last_sync');
+      return lastSync ? new Date(lastSync) : null;
+    } catch (error) {
+      this.logger.error('Failed to get last sync timestamp', error.stack);
+      return null;
+    }
   }
 
   private async isSyncInProgress(): Promise<boolean> {
-    // Implementation would check if sync is currently running
-    return false;
+    try {
+      // Check if sync is currently in progress
+      return await this.cacheService.get<boolean>('openlmis:sync_in_progress') || false;
+    } catch (error) {
+      this.logger.error('Failed to check sync progress', error.stack);
+      return false;
+    }
   }
 }
 

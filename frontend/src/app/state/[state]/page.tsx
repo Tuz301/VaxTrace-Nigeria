@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useVaxTraceStore } from '@/store/useVaxTraceStore';
+import { useMapContext } from '@/contexts/MapContext';
+import { nigeriaStates } from '@/data/nigeria-geospatial';
+import { StateViewMap } from '@/components/map/LocationMap';
 import {
   ArrowLeft,
   MapPin,
@@ -49,6 +52,7 @@ export default function StateViewPage() {
   const router = useRouter();
   const stateName = params.state as string;
   const { userSession } = useVaxTraceStore();
+  const { selectState, selectedState } = useMapContext();
   const [stateData, setStateData] = useState<StateViewData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -58,8 +62,14 @@ export default function StateViewPage() {
       return;
     }
 
+    // Find and select the state in the map context
+    const state = nigeriaStates.find((s) => s.name.toLowerCase() === stateName.replace(/-/g, ' ').toLowerCase());
+    if (state) {
+      selectState(state.id);
+    }
+
     fetchStateData();
-  }, [stateName, userSession]);
+  }, [stateName, userSession, selectState]);
 
   const fetchStateData = async () => {
     setIsLoading(true);
@@ -231,127 +241,126 @@ export default function StateViewPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* LGAs Table */}
-          <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4">
-            <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-              <MapPin className="w-5 h-5 text-cyan-400" />
-              Local Government Areas
-            </h2>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-slate-800">
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">LGA</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">Facilities</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">Critical</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">Coverage</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {stateData.lgas.map((lga, index) => (
-                    <tr key={index} className="border-b border-slate-800/50 hover:bg-slate-800/30">
-                      <td className="px-4 py-3 text-sm text-white">{lga.name}</td>
-                      <td className="px-4 py-3 text-sm text-white">{lga.facilities}</td>
-                      <td className="px-4 py-3 text-sm text-white">
-                        <span className={lga.criticalStock > 0 ? 'text-rose-500' : 'text-emerald-500'}>
-                          {lga.criticalStock}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-white">{lga.stockCoverage}%</td>
-                      <td className="px-4 py-3">
-                        <Link
-                          href={`/lga/${lga.name.toLowerCase().replace(/ /g, '-')}`}
-                          className="text-xs text-emerald-400 hover:underline"
-                        >
-                          View
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Map - Takes up 2 columns on large screens */}
+          <div className="lg:col-span-2">
+            <div className="bg-slate-900/50 border border-slate-800 rounded-lg overflow-hidden">
+              <div className="p-4 border-b border-slate-800">
+                <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                  <MapPin className="w-5 h-5 text-cyan-400" />
+                  Geographical View
+                </h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  Click on an LGA to view detailed information
+                </p>
+              </div>
+              <StateViewMap height="500px" className="w-full" />
             </div>
           </div>
 
           {/* Recent Alerts */}
           <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4">
             <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-rose-400" />
+              <AlertTriangle className="w-5 h-5 text-rose-500" />
               Recent Alerts
             </h2>
             <div className="space-y-3">
               {stateData.recentAlerts.map((alert) => (
                 <div
                   key={alert.id}
-                  className={`border rounded-lg p-3 hover:bg-slate-800/30 transition-colors cursor-pointer ${
-                    alert.severity === 'CRITICAL'
-                      ? 'border-rose-500/30'
-                      : alert.severity === 'HIGH'
-                      ? 'border-amber-500/30'
-                      : 'border-slate-700'
-                  }`}
+                  className="bg-slate-800/50 border border-slate-700 rounded-lg p-3"
                 >
                   <div className="flex items-start justify-between mb-2">
-                    <div>
+                    <div className="flex-1">
                       <p className="text-sm font-medium text-white">{alert.facilityName}</p>
-                      <p className="text-xs text-slate-500">{alert.type}</p>
+                      <p className="text-xs text-slate-400 mt-1">{alert.message}</p>
                     </div>
                     <span
-                      className={`text-xs px-2 py-1 rounded ${
+                      className={`px-2 py-1 rounded text-xs font-medium ${
                         alert.severity === 'CRITICAL'
-                          ? 'bg-rose-500/20 text-rose-400'
+                          ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
                           : alert.severity === 'HIGH'
-                          ? 'bg-amber-500/20 text-amber-400'
-                          : 'bg-slate-700 text-slate-300'
+                          ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                          : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
                       }`}
                     >
                       {alert.severity}
                     </span>
                   </div>
-                  <p className="text-sm text-slate-300">{alert.message}</p>
+                  <div className="flex items-center justify-between text-xs text-slate-500">
+                    <span>{alert.type}</span>
+                    <span>{new Date(alert.createdAt).toLocaleDateString()}</span>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
         </div>
 
-        {/* Stock Distribution */}
-        <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-6">
+        {/* LGAs Table */}
+        <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4">
           <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-            <Package className="w-5 h-5 text-emerald-400" />
-            Stock Distribution
+            <MapPin className="w-5 h-5 text-cyan-400" />
+            Local Government Areas
           </h2>
-          <div className="grid grid-cols-4 gap-4">
-            <div className="bg-rose-500/10 border border-rose-500/30 rounded-lg p-4 text-center">
-              <p className="text-3xl font-bold text-rose-500">{stateData.criticalStock}</p>
-              <p className="text-sm text-slate-400 mt-1">Critical</p>
-              <p className="text-xs text-slate-500 mt-1">
-                {((stateData.criticalStock / stateData.totalFacilities) * 100).toFixed(1)}% of facilities
-              </p>
-            </div>
-            <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 text-center">
-              <p className="text-3xl font-bold text-amber-500">{stateData.lowStock}</p>
-              <p className="text-sm text-slate-400 mt-1">Low Stock</p>
-              <p className="text-xs text-slate-500 mt-1">
-                {((stateData.lowStock / stateData.totalFacilities) * 100).toFixed(1)}% of facilities
-              </p>
-            </div>
-            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4 text-center">
-              <p className="text-3xl font-bold text-emerald-500">{stateData.adequateStock}</p>
-              <p className="text-sm text-slate-400 mt-1">Adequate</p>
-              <p className="text-xs text-slate-500 mt-1">
-                {((stateData.adequateStock / stateData.totalFacilities) * 100).toFixed(1)}% of facilities
-              </p>
-            </div>
-            <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-4 text-center">
-              <p className="text-3xl font-bold text-cyan-500">{stateData.overstocked}</p>
-              <p className="text-sm text-slate-400 mt-1">Overstocked</p>
-              <p className="text-xs text-slate-500 mt-1">
-                {((stateData.overstocked / stateData.totalFacilities) * 100).toFixed(1)}% of facilities
-              </p>
-            </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-slate-800">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">LGA</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">Facilities</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">Critical</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">Coverage</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {stateData.lgas.map((lga) => (
+                  <tr key={lga.name} className="hover:bg-slate-800/50 transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="text-sm font-medium text-white">{lga.name}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="text-sm text-slate-300">{lga.facilities}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div
+                        className={`text-sm font-medium ${
+                          lga.criticalStock > 0 ? 'text-rose-400' : 'text-emerald-400'
+                        }`}
+                      >
+                        {lga.criticalStock}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 bg-slate-700 rounded-full h-2 max-w-[100px]">
+                          <div
+                            className={`h-2 rounded-full ${
+                              lga.stockCoverage >= 80
+                                ? 'bg-emerald-500'
+                                : lga.stockCoverage >= 60
+                                ? 'bg-amber-500'
+                                : 'bg-rose-500'
+                            }`}
+                            style={{ width: `${lga.stockCoverage}%` }}
+                          />
+                        </div>
+                        <span className="text-sm text-slate-300">{lga.stockCoverage}%</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Link
+                        href={`/lga/${lga.name.toLowerCase().replace(/\s+/g, '-')}`}
+                        className="text-cyan-400 hover:text-cyan-300 text-sm font-medium"
+                      >
+                        View →
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </main>

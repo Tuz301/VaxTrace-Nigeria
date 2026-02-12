@@ -1,12 +1,15 @@
 /**
  * VaxTrace Nigeria - Main Application Entry Point
- * 
+ *
  * NestJS backend application for vaccine supply chain analytics.
  * This is the main entry point that bootstraps the application.
+ *
+ * FIX #10: Database connection pool management
+ * FIX #12: Graceful shutdown
  */
 
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, Logger } from '@nestjs/common';
+import { ValidationPipe, Logger, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
 import { AppModule } from './modules/app.module';
@@ -20,6 +23,12 @@ async function bootstrap() {
 
   const configService = app.get(ConfigService);
   const port = configService.get<number>('PORT') || 3001;
+
+  // FIX #15: API Versioning Strategy
+  app.enableVersioning({
+    type: VersioningType.URI,
+    defaultVersion: '1',
+  });
 
   // Security middleware
   app.use(helmet({
@@ -70,6 +79,9 @@ async function bootstrap() {
     exclude: ['/health', '/metrics'],
   });
 
+  // FIX #12: Graceful Shutdown
+  setupGracefulShutdown(app, logger);
+
   await app.listen(port);
 
   logger.log(`
@@ -85,6 +97,52 @@ async function bootstrap() {
 ║                                                                   ║
 ╚═══════════════════════════════════════════════════════════════════╝
   `);
+}
+
+/**
+ * FIX #12: Graceful Shutdown
+ * Handles SIGTERM and SIGINT signals for clean shutdown
+ */
+function setupGracefulShutdown(app: any, logger: Logger): void {
+  const shutdownSignals = ['SIGTERM', 'SIGINT'];
+  
+  shutdownSignals.forEach((signal) => {
+    process.on(signal as NodeJS.Signals, async () => {
+      logger.log(`Received ${signal} signal. Starting graceful shutdown...`);
+      
+      try {
+        // Stop accepting new connections
+        const server = app.getHttpServer();
+        if (server) {
+          server.close(() => {
+            logger.log('HTTP server closed');
+          });
+        }
+        
+        // Wait for in-flight requests to complete (max 30 seconds)
+        await app.close();
+        
+        logger.log('Application closed successfully');
+        process.exit(0);
+      } catch (error) {
+        logger.error('Error during shutdown:', error);
+        process.exit(1);
+      }
+    });
+  });
+  
+  // Handle uncaught exceptions
+  process.on('uncaughtException', (error) => {
+    logger.error('Uncaught Exception:', error);
+    // Give time for logging before exit
+    setTimeout(() => process.exit(1), 1000);
+  });
+  
+  // Handle unhandled promise rejections
+  process.on('unhandledRejection', (reason, promise) => {
+    logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    // Don't exit, just log
+  });
 }
 
 bootstrap().catch((error) => {

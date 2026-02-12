@@ -1,12 +1,28 @@
 /**
  * VaxTrace Nigeria - Alerts API Route
- * 
+ *
  * This API route provides alerts data to the frontend.
  * In development, it returns mock data. In production, it would
  * fetch from the backend OpenLMIS integration.
+ *
+ * SECURITY: Input validation using Zod to prevent SQL Injection and XSS
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+
+// ============================================
+// INPUT VALIDATION SCHEMA
+// ============================================
+
+const AlertsQuerySchema = z.object({
+  severity: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).optional(),
+  type: z.enum(['STOCKOUT', 'EXPIRY', 'COLD_CHAIN', 'DAMAGE', 'QUALITY']).optional(),
+  state: z.string().max(100).optional(),
+  active: z.coerce.boolean().optional(),
+});
+
+type AlertsQuery = z.infer<typeof AlertsQuerySchema>;
 
 interface Alert {
   id: string;
@@ -93,15 +109,32 @@ const mockAlerts: Alert[] = [
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const severity = searchParams.get('severity');
-    const type = searchParams.get('type');
-    const state = searchParams.get('state');
-    const active = searchParams.get('active');
-
+    
+    // Validate and parse query parameters using Zod
+    const validationResult = AlertsQuerySchema.safeParse({
+      severity: searchParams.get('severity'),
+      type: searchParams.get('type'),
+      state: searchParams.get('state'),
+      active: searchParams.get('active'),
+    });
+    
+    // Return 400 if validation fails
+    if (!validationResult.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Invalid query parameters',
+          details: validationResult.error.errors,
+        },
+        { status: 400 }
+      );
+    }
+    
+    const { severity, type, state, active } = validationResult.data;
     let filteredAlerts = [...mockAlerts];
 
     // Filter by active status
-    if (active === 'true') {
+    if (active) {
       filteredAlerts = filteredAlerts.filter((alert) => !alert.resolvedAt);
     }
 

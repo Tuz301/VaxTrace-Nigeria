@@ -6,6 +6,7 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://vaxtrace.gov.ng'),
   title: 'VaxTrace Nigeria - Vaccine Supply Chain Analytics',
   description:
     'Real-time vaccine supply chain analytics dashboard for Nigeria. Monitor stock levels, track cold chain equipment, and optimize distribution across the national health system.',
@@ -55,8 +56,6 @@ export const metadata: Metadata = {
     apple: '/apple-touch-icon.png',
   },
   manifest: '/manifest.json',
-  themeColor: '#10b981',
-  colorScheme: 'dark',
 };
 
 export const viewport: Viewport = {

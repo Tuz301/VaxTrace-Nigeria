@@ -12,6 +12,12 @@ import { CacheModule } from './cache/cache.module';
 import { OpenLMISModule } from './openlmis/openlmis.module';
 import { ProtobufModule } from './protobuf/protobuf.module';
 import { WebhookModule } from './webhook/webhook.module';
+import { HealthModule } from './health/health.module';
+import { LMDModule } from './lmd/lmd.module';
+import { AuthModule } from './auth/auth.module';
+import { DeliveryModule } from './delivery/delivery.module';
+import { AlertsModule } from './alerts/alerts.module';
+import { PredictiveInsightsModule } from './predictive-insights/predictive-insights.module';
 
 @Module({
   imports: [
@@ -30,6 +36,12 @@ import { WebhookModule } from './webhook/webhook.module';
     OpenLMISModule,
     ProtobufModule,
     WebhookModule,
+    HealthModule,
+    LMDModule,
+    AuthModule,
+    DeliveryModule,
+    AlertsModule,
+    PredictiveInsightsModule,
   ],
   controllers: [],
   providers: [],

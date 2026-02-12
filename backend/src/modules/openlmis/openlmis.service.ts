@@ -146,6 +146,9 @@ export class OpenLMISService implements OnModuleInit, OnModuleDestroy {
     // Schedule token refresh before expiry
     this.scheduleTokenRefresh();
     
+    // FIX #4: Start circuit breaker auto-reset checker
+    this.startCircuitBreakerChecker();
+    
     this.logger.log('OpenLMIS Service initialized successfully');
   }
 
@@ -247,6 +250,34 @@ export class OpenLMISService implements OnModuleInit, OnModuleDestroy {
       await this.fetchAccessToken();
       this.scheduleTokenRefresh();
     }, refreshDelay);
+  }
+
+  /**
+   * FIX #4: Start circuit breaker auto-reset checker
+   * Proactively checks and resets circuit breaker after timeout
+   */
+  private startCircuitBreakerChecker(): void {
+    // Check every 30 seconds
+    setInterval(async () => {
+      if (this.circuitBreaker.isOpen) {
+        const timeSinceLastFailure = Date.now() - this.circuitBreaker.lastFailureTime.getTime();
+        
+        if (timeSinceLastFailure > this.CIRCUIT_BREAKER_TIMEOUT) {
+          this.logger.log('Circuit breaker timeout elapsed - attempting reset...');
+          
+          // Try a health check to see if OpenLMIS is back
+          try {
+            await this.healthCheck();
+            this.resetCircuitBreaker();
+            this.logger.log('Circuit breaker reset successfully after timeout');
+          } catch (error) {
+            this.logger.warn('Circuit breaker reset failed - OpenLMIS still unavailable');
+          }
+        }
+      }
+    }, 30000); // Check every 30 seconds
+    
+    this.logger.log('Circuit breaker auto-reset checker started');
   }
 
   // ============================================
@@ -435,14 +466,29 @@ export class OpenLMISService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Health check for OpenLMIS connectivity
+   * Returns true if OpenLMIS is accessible, false otherwise
    */
   @Cron(CronExpression.EVERY_5_MINUTES)
-  async healthCheck() {
+  async healthCheck(): Promise<boolean> {
+    if (this.mockMode) {
+      this.logger.debug('OpenLMIS in mock mode - health check skipped');
+      return false;
+    }
+
     try {
       await this.get('/api/system/info');
       this.logger.debug('OpenLMIS health check passed');
+      return true;
     } catch (error) {
       this.logger.warn('OpenLMIS health check failed');
+      return false;
     }
+  }
+
+  /**
+   * Get current mock mode status
+   */
+  isMockMode(): boolean {
+    return this.mockMode;
   }
 }

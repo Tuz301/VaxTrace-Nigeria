@@ -145,6 +145,16 @@ export class CacheService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * FIX #13: Health check - Ping Redis
+   */
+  async ping(): Promise<void> {
+    if (!this.redis) {
+      throw new Error('Redis connection not established');
+    }
+    await this.redis.ping();
+  }
+
   // ============================================
   // BASIC CACHE OPERATIONS
   // ============================================

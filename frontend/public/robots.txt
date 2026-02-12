@@ -1,0 +1,69 @@
+# VaxTrace Nigeria - Robots.txt
+# 
+# This file tells search engine crawlers which pages they can access
+# and which parts of the site should not be indexed.
+#
+# Learn more: https://developers.google.com/search/docs/crawling-indexing/robots-txt
+
+# ============================================
+# GENERAL SETTINGS
+# ============================================
+
+User-agent: *
+Allow: /
+
+# Disallow private/admin routes
+Disallow: /api/
+Disallow: /login
+Disallow: /scan
+Disallow: /admin
+Disallow: /private
+
+# Disallow test and development routes
+Disallow: /test
+Disallow: /_next
+Disallow: /_error
+
+# ============================================
+# SITEMAP LOCATION
+# ============================================
+
+Sitemap: https://vaxtrace.gov.ng/sitemap.xml
+
+# ============================================
+# CRAWL DELAY (Be nice to servers)
+# ============================================
+
+# No delay for well-behaved crawlers
+Crawl-delay: 0
+
+# ============================================
+# SPECIFIC CRAWLER SETTINGS
+# ============================================
+
+# Allow Googlebot
+User-agent: Googlebot
+Allow: /
+
+# Allow Bingbot
+User-agent: Bingbot
+Allow: /
+
+# Allow Facebook (for sharing previews)
+User-agent: facebookexternalhit
+Allow: /
+
+# Allow Twitter (for card previews)
+User-agent: Twitterbot
+Allow: /
+
+# ============================================
+# ADDITIONAL DIRECTIVES
+# ============================================
+
+# Host directive (for Yandex)
+Host: vaxtrace.gov.ng
+
+# ============================================
+# END OF FILE
+# ============================================

@@ -1,11 +1,26 @@
 /**
  * VaxTrace Nigeria - Transfer Suggestions API Route
- * 
+ *
  * This API route provides transfer suggestions to help redistribute
  * vaccines from facilities with excess stock to those with shortages.
+ *
+ * SECURITY: Input validation using Zod to prevent SQL Injection and XSS
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+
+// ============================================
+// INPUT VALIDATION SCHEMA
+// ============================================
+
+const TransferSuggestionsQuerySchema = z.object({
+  priority: z.enum(['HIGH', 'MEDIUM', 'LOW']).optional(),
+  state: z.string().max(100).optional(),
+  vaccineCode: z.string().max(50).optional(),
+});
+
+type TransferSuggestionsQuery = z.infer<typeof TransferSuggestionsQuerySchema>;
 
 interface TransferSuggestion {
   id: string;
@@ -153,10 +168,27 @@ const mockTransferSuggestions: TransferSuggestion[] = [
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const priority = searchParams.get('priority');
-    const state = searchParams.get('state');
-    const vaccineCode = searchParams.get('vaccineCode');
-
+    
+    // Validate and parse query parameters using Zod
+    const validationResult = TransferSuggestionsQuerySchema.safeParse({
+      priority: searchParams.get('priority'),
+      state: searchParams.get('state'),
+      vaccineCode: searchParams.get('vaccineCode'),
+    });
+    
+    // Return 400 if validation fails
+    if (!validationResult.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Invalid query parameters',
+          details: validationResult.error.errors,
+        },
+        { status: 400 }
+      );
+    }
+    
+    const { priority, state, vaccineCode } = validationResult.data;
     let filteredSuggestions = [...mockTransferSuggestions];
 
     // Filter by priority

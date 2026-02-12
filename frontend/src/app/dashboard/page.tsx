@@ -4,8 +4,10 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useVaxTraceStore } from '@/store/useVaxTraceStore';
-import { NeuralMap } from '@/components/map/NeuralMap';
+import { NationalViewMap } from '@/components/map';
+import { MapErrorBoundary } from '@/components/map/MapErrorBoundary';
 import { AlertTicker } from '@/components/dashboard/AlertTicker';
+import { useMapContext } from '@/contexts/MapContext';
 import { Wifi, WifiOff, AlertTriangle, Activity, TrendingUp, Package, Clock, MapPin, Filter } from 'lucide-react';
 
 // Nigeria states data
@@ -67,12 +69,17 @@ export default function DashboardPage() {
     fetchTransferSuggestions,
   } = useVaxTraceStore();
 
+  const { clearSelection } = useMapContext();
+
   useEffect(() => {
     // Fetch initial data
     fetchStockData();
     fetchAlerts();
     fetchPredictiveInsights();
     fetchTransferSuggestions();
+
+    // Clear any previous map selection when loading dashboard
+    clearSelection();
 
     // Set up auto-refresh every 5 minutes
     const interval = setInterval(() => {
@@ -83,17 +90,17 @@ export default function DashboardPage() {
     }, 5 * 60 * 1000);
 
     return () => clearInterval(interval);
-  }, [offlineStatus.isOffline]);
+  }, [offlineStatus.isOffline, clearSelection]);
 
   // Calculate KPIs
   const kpis = useMemo(() => {
     const totalFacilities = stockData.length;
-    const criticalStock = stockData.filter((s) => s.stockStatus === 'CRITICAL').length;
-    const lowStock = stockData.filter((s) => s.stockStatus === 'LOW').length;
-    const adequateStock = stockData.filter((s) => s.stockStatus === 'ADEQUATE').length;
+    const criticalStock = stockData.filter((s) => s.stockStatus === 'STOCKOUT').length;
+    const lowStock = stockData.filter((s) => s.stockStatus === 'UNDERSTOCKED').length;
+    const adequateStock = stockData.filter((s) => s.stockStatus === 'OPTIMAL').length;
     const overstocked = stockData.filter((s) => s.stockStatus === 'OVERSTOCKED').length;
     const totalAlerts = alerts.length;
-    const criticalAlerts = alerts.filter((a) => a.severity === 'critical').length;
+    const criticalAlerts = alerts.filter((a) => a.severity === 'CRITICAL').length;
 
     return {
       totalFacilities,
@@ -336,9 +343,11 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Neural Map */}
+          {/* Leaflet Map */}
           <div className="lg:col-span-2 bg-slate-900/50 border border-slate-800 rounded-lg overflow-hidden">
-            <NeuralMap />
+            <MapErrorBoundary>
+              <NationalViewMap height="100%" />
+            </MapErrorBoundary>
           </div>
 
           {/* Transfer Suggestions */}

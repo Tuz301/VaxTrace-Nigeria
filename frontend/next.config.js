@@ -63,6 +63,14 @@ const nextConfig = {
     domains: ['api.mapbox.com', 'a.tiles.mapbox.com', 'b.tiles.mapbox.com'],
     unoptimized: false,
   },
+  webpack: (config) => {
+    // Add support for @/shared/* imports
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@/shared': require('path').resolve(__dirname, '../shared'),
+    };
+    return config;
+  },
   env: {
     NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN: process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN,
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,

@@ -6,6 +6,19 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+
+// ============================================
+// INPUT VALIDATION SCHEMA
+// ============================================
+
+const ActiveAlertsQuerySchema = z.object({
+  severity: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).optional(),
+  type: z.enum(['STOCKOUT', 'EXPIRY', 'COLD_CHAIN', 'DAMAGE', 'QUALITY']).optional(),
+  state: z.string().max(100).optional(),
+});
+
+type ActiveAlertsQuery = z.infer<typeof ActiveAlertsQuerySchema>;
 
 interface Alert {
   id: string;
@@ -92,9 +105,27 @@ const mockActiveAlerts: Alert[] = [
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const severity = searchParams.get('severity');
-    const type = searchParams.get('type');
-    const state = searchParams.get('state');
+    
+    // Validate and parse query parameters using Zod
+    const validationResult = ActiveAlertsQuerySchema.safeParse({
+      severity: searchParams.get('severity'),
+      type: searchParams.get('type'),
+      state: searchParams.get('state'),
+    });
+    
+    // Return 400 if validation fails
+    if (!validationResult.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Invalid query parameters',
+          details: validationResult.error.errors,
+        },
+        { status: 400 }
+      );
+    }
+    
+    const { severity, type, state } = validationResult.data;
 
     // Filter only active alerts (no resolvedAt)
     let filteredAlerts = mockActiveAlerts.filter((alert) => !alert.resolvedAt);

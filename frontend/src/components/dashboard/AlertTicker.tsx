@@ -168,9 +168,9 @@ export function AlertTicker({
 
       // Sort by severity and date
       filtered = filtered.sort((a, b) => {
-        const severityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
+        const severityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
         const severityDiff =
-          severityOrder[a.severity] - severityOrder[b.severity];
+          (severityOrder[a.severity] ?? 99) - (severityOrder[b.severity] ?? 99);
         if (severityDiff !== 0) return severityDiff;
 
         return (
