@@ -13,8 +13,12 @@ import { ValidationPipe, Logger, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
 import { AppModule } from './modules/app.module';
+import { initSentry } from './sentry';
 
 async function bootstrap() {
+  // Initialize Sentry for error tracking (must be first)
+  initSentry();
+  
   const logger = new Logger('Bootstrap');
   
   const app = await NestFactory.create(AppModule, {

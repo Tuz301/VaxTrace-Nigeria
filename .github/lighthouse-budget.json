@@ -1,0 +1,64 @@
+[
+  {
+    "path": "/*.js",
+    "limit": 40960,
+    "resourceSizes": [
+      {
+        "resourceType": "script",
+        "budget": 200
+      },
+      {
+        "resourceType": "total",
+        "budget": 300
+      }
+    ]
+  },
+  {
+    "path": "/*.css",
+    "limit": 20480,
+    "resourceSizes": [
+      {
+        "resourceType": "stylesheet",
+        "budget": 100
+      },
+      {
+        "resourceType": "total",
+        "budget": 150
+      }
+    ]
+  },
+  {
+    "path": "/dashboard",
+    "timings": [
+      {
+        "metric": "first-contentful-paint",
+        "budget": 2000
+      },
+      {
+        "metric": "largest-contentful-paint",
+        "budget": 2500
+      },
+      {
+        "metric": "cumulative-layout-shift",
+        "budget": 0.1
+      }
+    ]
+  },
+  {
+    "path": "/",
+    "timings": [
+      {
+        "metric": "first-contentful-paint",
+        "budget": 1500
+      },
+      {
+        "metric": "largest-contentful-paint",
+        "budget": 2000
+      },
+      {
+        "metric": "cumulative-layout-shift",
+        "budget": 0.1
+      }
+    ]
+  }
+]

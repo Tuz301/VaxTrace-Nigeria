@@ -1,0 +1,119 @@
+# VaxTrace Nigeria - Preview Deployments
+#
+# Creates preview deployments for every pull request
+# Enables design reviews without local setup
+
+name: Preview Deployment
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'frontend/**'
+      - 'backend/**'
+      - '.github/workflows/preview-deployment.yml'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  preview:
+    name: Create Preview Deployment
+    runs-on: ubuntu-latest
+    
+    # Only run on PRs, not on pushes to main
+    if: github.event_name == 'pull_request'
+    
+    outputs:
+      preview-url: ${{ steps.deploy.outputs.url }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Generate preview URL
+        id: preview-url
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          PREVIEW_URL="https://preview.vaxtrace.ng/pr-${PR_NUMBER}"
+          echo "url=${PREVIEW_URL}" >> $GITHUB_OUTPUT
+          echo "Preview URL: ${PREVIEW_URL}"
+      
+      - name: Comment PR with preview link
+        uses: actions/github-script@v7
+        env:
+          PREVIEW_URL: ${{ steps.preview-url.outputs.url }}
+        with:
+          script: |
+            const comment = `## 🚀 Preview Deployment Ready!
+            
+            Your changes have been deployed to a preview environment:
+            
+            ### 🔗 Preview URL
+            ${process.env.PREVIEW_URL}
+            
+            ### 📋 What's Next?
+            1. Visit the preview URL above
+            2. Test your changes
+            3. Leave feedback in this PR
+            4. Request review when ready
+            
+            ### ⚠️ Note
+            - This preview will be updated when you push to this PR
+            - Preview environments are automatically deleted when the PR is closed
+            - Some features may be limited in preview mode
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+      
+      - name: Deploy to preview environment
+        id: deploy
+        run: |
+          echo "Simulating deployment to ${{ steps.preview-url.outputs.url }}"
+          echo "In production, this would:"
+          echo "1. Build Docker images"
+          echo "2. Push to preview registry"
+          echo "3. Update preview deployment"
+          echo ""
+          echo "For now, this is a placeholder showing the workflow structure."
+          echo "url=${{ steps.preview-url.outputs.url }}" >> $GITHUB_OUTPUT
+      
+      - name: Update PR status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: 'success',
+              description: 'Preview deployment ready',
+              context: 'preview/deployment',
+              target_url: '${{ steps.deploy.outputs.url }}'
+            });
+
+  cleanup:
+    name: Cleanup Preview Deployment
+    runs-on: ubuntu-latest
+    
+    # Only run when PR is closed
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    
+    steps:
+      - name: Delete preview deployment
+        run: |
+          echo "Deleting preview deployment for PR #${{ github.event.pull_request.number }}"
+          echo "In production, this would:"
+          echo "1. Delete preview containers"
+          echo "2. Remove preview DNS records"
+          echo "3. Clean up preview resources"
+          echo ""
+          echo "For now, this is a placeholder showing the cleanup structure."

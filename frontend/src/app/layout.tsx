@@ -2,6 +2,13 @@ import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import { VaxTraceProviders } from './providers';
 import './globals.css';
+import './sentry';
+import { initPostHog } from '@/lib/posthog';
+
+// Initialize PostHog analytics
+if (typeof window !== 'undefined') {
+  initPostHog();
+}
 
 const inter = Inter({ subsets: ['latin'] });
 
