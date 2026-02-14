@@ -39,11 +39,16 @@ export const VersionColumn = TypeORMVersionColumn;
  * OptimisticLockError - thrown when version mismatch occurs
  */
 export class OptimisticLockError extends Error {
+  entityName: string;
+  entityId: string;
+  currentVersion: number;
+  expectedVersion: number;
+
   constructor(
-    public entityName: string,
-    public entityId: string,
-    public currentVersion: number,
-    public expectedVersion: number
+    entityName: string,
+    entityId: string,
+    currentVersion: number,
+    expectedVersion: number
   ) {
     super(
       `Optimistic lock error for ${entityName}#${entityId}: ` +
@@ -51,6 +56,10 @@ export class OptimisticLockError extends Error {
       `The entity was modified by another transaction.`
     );
     this.name = 'OptimisticLockError';
+    this.entityName = entityName;
+    this.entityId = entityId;
+    this.currentVersion = currentVersion;
+    this.expectedVersion = expectedVersion;
   }
 }
 

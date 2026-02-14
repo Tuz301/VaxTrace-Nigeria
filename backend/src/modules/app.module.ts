@@ -8,6 +8,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { CacheModule } from './cache/cache.module';
 import { OpenLMISModule } from './openlmis/openlmis.module';
 import { ProtobufModule } from './protobuf/protobuf.module';
@@ -26,6 +27,25 @@ import { PredictiveInsightsModule } from './predictive-insights/predictive-insig
       isGlobal: true,
       envFilePath: ['../.env.local', '../.env', '.env.local', '.env'],
       cache: true,
+    }),
+
+    // TypeORM - Database configuration
+    TypeOrmModule.forRoot({
+      type: 'postgres',
+      host: process.env.POSTGRES_HOST || 'localhost',
+      port: parseInt(process.env.POSTGRES_PORT || '5432'),
+      username: process.env.POSTGRES_USER || 'postgres',
+      password: process.env.POSTGRES_PASSWORD || 'postgres',
+      database: process.env.POSTGRES_DB || 'vaxtrace',
+      entities: [],
+      synchronize: false,
+      logging: false,
+      extra: {
+        max: 35,
+        min: 2,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 2000,
+      },
     }),
 
     // Schedule module for cron jobs

@@ -12,11 +12,19 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import L from 'leaflet';
+import type { LatLngBoundsExpression, LatLngBounds } from 'leaflet';
 import { LeafletMap, MapLocation, MapViewMode } from './LeafletMap';
 import { useMapContext } from '@/contexts/MapContext';
 import { nigeriaStates } from '@/data/nigeria-geospatial';
 import { cn } from '@/lib/utils';
+
+// Lazy load Leaflet only on client side
+const getLeaflet = async () => {
+  if (typeof window !== 'undefined') {
+    return await import('leaflet');
+  }
+  return null;
+};
 
 export interface LocationMapProps {
   /** Additional CSS classes */
@@ -60,13 +68,14 @@ export function LocationMap({
   const locationWithBounds = useMemo(() => {
     if (!selectedLocation) return null;
 
-    let bounds: L.LatLngBoundsExpression | undefined;
+    let bounds: LatLngBoundsExpression | undefined;
 
     if (selectedLocation.type === 'state' && selectedState) {
       // Create bounds for the state based on its LGAs
       if (selectedState.lgas.length > 0) {
         const latlngs = selectedState.lgas.map((lga) => [lga.coordinates.lat, lga.coordinates.lng] as [number, number]);
-        bounds = L.latLngBounds(latlngs);
+        // Use array format for bounds instead of L.latLngBounds
+        bounds = latlngs as any;
       }
     } else if (selectedLocation.type === 'lga' && selectedLGA) {
       // Create bounds for the LGA (smaller area)
@@ -74,7 +83,7 @@ export function LocationMap({
       bounds = [
         [lat - 0.1, lng - 0.1],
         [lat + 0.1, lng + 0.1],
-      ] as L.LatLngBoundsExpression;
+      ] as LatLngBoundsExpression;
     }
 
     return {
@@ -89,7 +98,7 @@ export function LocationMap({
   };
 
   // Handle bounds change
-  const handleBoundsChange = (bounds: L.LatLngBounds) => {
+  const handleBoundsChange = (bounds: LatLngBounds) => {
     setBounds(bounds);
   };
 

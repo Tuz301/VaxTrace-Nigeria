@@ -65,9 +65,10 @@ const nextConfig = {
   },
   webpack: (config) => {
     // Add support for @/shared/* imports
+    const path = require('path');
     config.resolve.alias = {
       ...config.resolve.alias,
-      '@/shared': require('path').resolve(__dirname, '../shared'),
+      '@/shared': path.resolve(__dirname, '../shared'),
     };
     return config;
   },

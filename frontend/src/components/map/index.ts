@@ -29,6 +29,9 @@ export type { LocationMapProps } from './LocationMap';
 export { FallbackMap } from './FallbackMap';
 export { NeuralMap } from './NeuralMap';
 
+// Error boundary for map components
+export { MapErrorBoundary } from './MapErrorBoundary';
+
 // Re-export map context for convenience
 export { 
   MapProvider, 

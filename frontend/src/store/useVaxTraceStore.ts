@@ -207,6 +207,7 @@ interface VaxTraceState {
   sidebarOpen: boolean;
   alertPanelOpen: boolean;
   selectedTimeRange: '7d' | '30d' | '90d' | '1y';
+  theme: 'light' | 'dark' | 'system';
 }
 
 // ============================================
@@ -254,6 +255,8 @@ interface VaxTraceActions {
   toggleSidebar: () => void;
   toggleAlertPanel: () => void;
   setSelectedTimeRange: (range: '7d' | '30d' | '90d' | '1y') => void;
+  setTheme: (theme: 'light' | 'dark' | 'system') => void;
+  getEffectiveTheme: () => 'light' | 'dark';
 }
 
 // ============================================
@@ -302,6 +305,7 @@ const initialState: VaxTraceState = {
   sidebarOpen: true,
   alertPanelOpen: false,
   selectedTimeRange: '30d',
+  theme: 'dark',
 };
 
 // ============================================
@@ -472,6 +476,28 @@ export const useVaxTraceStore = create<VaxTraceState & VaxTraceActions>()(
             selectedTimeRange: range,
           }),
 
+        setTheme: (theme) => {
+          set({ theme });
+          // Apply theme to document
+          const effectiveTheme = theme === 'system'
+            ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+            : theme;
+          
+          if (effectiveTheme === 'dark') {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+        },
+
+        getEffectiveTheme: () => {
+          const state = get();
+          if (state.theme === 'system') {
+            return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          }
+          return state.theme;
+        },
+
         // Fetch Methods (FIXED - Issue #2: Frontend State Desynchronization)
         fetchStockData: async (retryCount = 0) => {
           set({ stockDataLoading: true, stockDataError: null });
@@ -573,7 +599,27 @@ export const useVaxTraceStore = create<VaxTraceState & VaxTraceActions>()(
           mapFilters: state.mapFilters,
           sidebarOpen: state.sidebarOpen,
           selectedTimeRange: state.selectedTimeRange,
+          theme: state.theme,
         }),
+        onRehydrateStorage: () => (state) => {
+          // Convert dismissedAlerts array back to Set after rehydration
+          if (state?.dismissedAlerts && Array.isArray(state.dismissedAlerts)) {
+            state.dismissedAlerts = new Set(state.dismissedAlerts);
+          }
+          
+          // Initialize theme on rehydration
+          if (state?.theme) {
+            const effectiveTheme = state.theme === 'system'
+              ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+              : state.theme;
+            
+            if (effectiveTheme === 'dark') {
+              document.documentElement.classList.add('dark');
+            } else {
+              document.documentElement.classList.remove('dark');
+            }
+          }
+        },
       }
     )
   )
@@ -785,5 +831,20 @@ export const useOfflineStatus = () => {
   return {
     offlineStatus,
     setOfflineStatus,
+  };
+};
+
+/**
+ * Hook for theme management
+ */
+export const useTheme = () => {
+  const theme = useVaxTraceStore((state) => state.theme);
+  const setTheme = useVaxTraceStore((state) => state.setTheme);
+  const getEffectiveTheme = useVaxTraceStore((state) => state.getEffectiveTheme);
+
+  return {
+    theme,
+    setTheme,
+    getEffectiveTheme,
   };
 };

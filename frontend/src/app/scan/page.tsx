@@ -44,17 +44,33 @@ export default function ScanPage() {
       const batchNumber = pathParts[1];
       const facilityCode = pathParts[2];
 
-      // In production, this would verify with the backend API
-      // For demo, using mock data
-      const mockResult: ScanResult = {
-        success: true,
+      // Call backend API to verify and get delivery details
+      const response = await fetch('/api/v1/delivery/confirm', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          qrCodeId: `${batchNumber}/${facilityCode}`,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to verify QR code with backend');
+      }
+
+      const result = await response.json();
+
+      // Transform backend response to scan result format
+      const scanResult: ScanResult = {
+        success: result.success || true,
         batchNumber,
-        productName: 'Pentavalent',
-        quantity: 100,
-        facility: 'PHC-KANO-001',
+        productName: result.data?.productName || 'Unknown Vaccine',
+        quantity: result.data?.quantity || 0,
+        facility: result.data?.facilityName || facilityCode,
       };
 
-      setScanResult(mockResult);
+      setScanResult(scanResult);
     } catch (error) {
       setScanResult({
         success: false,
@@ -68,14 +84,31 @@ export default function ScanPage() {
   const handleDeliveryConfirmation = async (vvmStage: number, temperature: number) => {
     setIsProcessing(true);
     try {
-      // In production, this would submit to the backend API
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Submit delivery confirmation to backend API
+      const response = await fetch('/api/v1/delivery/confirm', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          qrCodeId: `${scanResult?.batchNumber}/${scanResult?.facility}`,
+          vvmStage,
+          temperature,
+          notes: `Delivery confirmed via QR scan`,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to confirm delivery with backend');
+      }
+
+      const result = await response.json();
 
       // Show success and reset
-      alert(`Delivery confirmed!\nVVM Stage: ${vvmStage}\nTemperature: ${temperature}°C`);
+      alert(`Delivery confirmed!\nVVM Stage: ${vvmStage}\nTemperature: ${temperature}°C\nConfirmation ID: ${result.confirmationId || 'N/A'}`);
       setScanResult(null);
     } catch (error) {
-      alert('Failed to confirm delivery. Please try again.');
+      alert(`Failed to confirm delivery: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsProcessing(false);
     }

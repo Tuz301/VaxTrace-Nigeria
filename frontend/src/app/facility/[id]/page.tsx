@@ -91,104 +91,45 @@ export default function FacilityDetailPage() {
   const fetchFacilityDetail = async () => {
     setIsLoading(true);
     try {
-      // In production, this would fetch from the API
-      // For now, using mock data
-      const mockFacility: FacilityDetail = {
-        id: facilityId,
-        name: 'Primary Health Center Kano',
-        code: 'PHC-KANO-001',
-        type: 'Primary Health Center',
-        state: 'Kano',
-        lga: 'Kano Municipal',
-        ward: 'Kofar Dan Agundi',
-        address: 'No 1, Emir Road, Kano',
-        phone: '+234 803 456 7890',
-        email: 'phc-kano001@health.gov.ng',
-        latitude: 12.0022,
-        longitude: 8.5919,
-        catchmentPopulation: 25000,
-        hasColdChain: true,
-        hasGenerator: true,
-        hasSolar: false,
-        inCharge: 'Dr. Amina Ibrahim',
-        stockData: [
-          {
-            productName: 'BCG',
-            stockStatus: 'ADEQUATE',
-            quantity: 500,
-            mos: 4.2,
-            expiryDate: '2025-06-15',
-            vvmStage: 2,
-            batchNumber: 'BCG-2024-001',
-          },
-          {
-            productName: 'OPV',
-            stockStatus: 'LOW',
-            quantity: 200,
-            mos: 1.8,
-            expiryDate: '2025-04-20',
-            vvmStage: 2,
-            batchNumber: 'OPV-2024-003',
-          },
-          {
-            productName: 'Pentavalent',
-            stockStatus: 'CRITICAL',
-            quantity: 50,
-            mos: 0.5,
-            expiryDate: '2025-03-10',
-            vvmStage: 3,
-            batchNumber: 'PENTA-2024-002',
-          },
-          {
-            productName: 'PCV',
-            stockStatus: 'ADEQUATE',
-            quantity: 800,
-            mos: 5.5,
-            expiryDate: '2025-08-30',
-            vvmStage: 1,
-            batchNumber: 'PCV-2024-001',
-          },
-        ],
-        cceData: [
-          {
-            equipmentType: 'Solar Refrigerator',
-            model: 'SDDPlus',
-            serialNumber: 'SDD-2023-4567',
-            currentTemp: 3.5,
-            minTemp: 2,
-            maxTemp: 8,
-            status: 'OPERATIONAL',
-            lastMaintenance: '2024-01-15',
-          },
-          {
-            equipmentType: 'Ice-lined Refrigerator',
-            model: 'ILR-300',
-            serialNumber: 'ILR-2022-1234',
-            currentTemp: 4.2,
-            minTemp: 2,
-            maxTemp: 8,
-            status: 'OPERATIONAL',
-            lastMaintenance: '2023-11-20',
-          },
-        ],
-        alerts: [
-          {
-            id: 'alert-1',
-            type: 'STOCKOUT',
-            severity: 'CRITICAL',
-            message: 'Pentavalent stock below 1 month supply',
-            createdAt: '2025-01-30T10:30:00Z',
-          },
-          {
-            id: 'alert-2',
-            type: 'EXPIRY',
-            severity: 'HIGH',
-            message: 'Pentavalent batch PENTA-2024-002 expiring in 40 days',
-            createdAt: '2025-01-28T14:20:00Z',
-          },
-        ],
+      // Fetch facility details from backend API
+      const response = await fetch(`/api/v1/facility/${facilityId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch facility details from backend');
+      }
+
+      const result = await response.json();
+
+      // Transform backend response to facility detail format
+      const facility: FacilityDetail = {
+        id: result.data?.id || facilityId,
+        name: result.data?.name || 'Unknown Facility',
+        code: result.data?.code || 'N/A',
+        type: result.data?.type || 'Health Center',
+        state: result.data?.state || 'Unknown State',
+        lga: result.data?.lga || 'Unknown LGA',
+        ward: result.data?.ward || 'N/A',
+        address: result.data?.address || 'N/A',
+        phone: result.data?.phone || 'N/A',
+        email: result.data?.email || 'N/A',
+        latitude: result.data?.latitude || 0,
+        longitude: result.data?.longitude || 0,
+        catchmentPopulation: result.data?.catchmentPopulation || 0,
+        hasColdChain: result.data?.hasColdChain ?? false,
+        hasGenerator: result.data?.hasGenerator ?? false,
+        hasSolar: result.data?.hasSolar ?? false,
+        inCharge: result.data?.inCharge || 'N/A',
+        stockData: result.data?.stockData || [],
+        cceData: result.data?.cceData || [],
+        alerts: result.data?.alerts || [],
       };
-      setFacility(mockFacility);
+
+      setFacility(facility);
     } catch (error) {
       console.error('Error fetching facility detail:', error);
     } finally {

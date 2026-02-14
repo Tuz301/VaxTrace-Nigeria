@@ -128,20 +128,37 @@ export async function GET(request: NextRequest) {
     }
     
     const { riskLevel, facilityId, productId } = validationResult.data;
-    let filteredInsights = [...mockPredictiveInsights];
 
+    // Fetch predictive insights from backend API
+    const response = await fetch('/api/v1/predictive-insights', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch predictive insights from backend');
+    }
+
+    const result = await response.json();
+
+    // Return predictive insights from backend
+    let filteredInsights = result.data?.insights || [];
+
+    // Apply additional filters from query parameters
     // Filter by riskLevel
     if (riskLevel) {
       filteredInsights = filteredInsights.filter(
-        (insight) => insight.riskLevel === riskLevel
+        (insight: any) => insight.riskLevel === riskLevel
       );
     }
 
     // Sort by riskLevel (CRITICAL first) and then by confidence (highest first)
-    const riskLevelOrder = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
-    filteredInsights.sort((a, b) => {
+    const riskLevelOrder: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+    filteredInsights.sort((a: PredictiveInsight, b: PredictiveInsight) => {
       if (a.riskLevel !== b.riskLevel) {
-        return riskLevelOrder[a.riskLevel] - riskLevelOrder[b.riskLevel];
+        return (riskLevelOrder[a.riskLevel] ?? 99) - (riskLevelOrder[b.riskLevel] ?? 99);
       }
       return b.confidence - a.confidence;
     });

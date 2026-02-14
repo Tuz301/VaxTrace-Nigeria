@@ -1,14 +1,24 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { useVaxTraceStore } from '@/store/useVaxTraceStore';
-import { NationalViewMap } from '@/components/map';
-import { MapErrorBoundary } from '@/components/map/MapErrorBoundary';
 import { AlertTicker } from '@/components/dashboard/AlertTicker';
 import { useMapContext } from '@/contexts/MapContext';
-import { Wifi, WifiOff, AlertTriangle, Activity, TrendingUp, Package, Clock, MapPin, Filter } from 'lucide-react';
+import { MapErrorBoundary } from '@/components/map';
+import { Wifi, WifiOff, AlertTriangle, Activity, TrendingUp, Package, Clock, MapPin, Filter, Loader2 } from 'lucide-react';
+
+// Dynamic import for map to avoid SSR issues with Leaflet
+const NationalViewMap = dynamic(() => import('@/components/map').then(mod => ({ default: mod.NationalViewMap })), {
+  ssr: false,
+  loading: () => (
+    <div className="h-[500px] bg-slate-900/50 border border-slate-800 rounded-lg flex items-center justify-center">
+      <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+    </div>
+  )
+});
 
 // Nigeria states data
 const NIGERIA_STATES = [
@@ -125,10 +135,10 @@ export default function DashboardPage() {
 
   if (!userSession?.isAuthenticated) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen bg-white dark:bg-slate-950 flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-white mb-4">VaxTrace Nigeria</h1>
-          <p className="text-slate-400 mb-6">Please authenticate to access the dashboard</p>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">VaxTrace Nigeria</h1>
+          <p className="text-slate-600 dark:text-slate-400 mb-6">Please authenticate to access the dashboard</p>
           <Link
             href="/login"
             className="px-6 py-3 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors"
@@ -141,7 +151,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-white">
       {/* Offline Status Banner */}
       {offlineStatus.isOffline && (
         <div className="bg-amber-500/20 border-b border-amber-500/50 px-4 py-2 flex items-center gap-2">
@@ -153,17 +163,17 @@ export default function DashboardPage() {
       )}
 
       {/* Header */}
-      <header className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm sticky top-0 z-40">
+      <header className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 backdrop-blur-sm sticky top-0 z-40">
         <div className="max-w-[1920px] mx-auto px-4 py-3">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-4">
               <h1 className="text-xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
                 VaxTrace Nigeria
               </h1>
-              <span className="text-xs text-slate-500">National Command Center</span>
+              <span className="text-xs text-slate-600 dark:text-slate-500">National Command Center</span>
             </div>
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 text-sm text-slate-400">
+              <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
                 {offlineStatus.isOffline ? (
                   <>
                     <WifiOff className="w-4 h-4 text-amber-500" />
@@ -176,12 +186,12 @@ export default function DashboardPage() {
                   </>
                 )}
               </div>
-              <div className="text-sm text-slate-400">
+              <div className="text-sm text-slate-600 dark:text-slate-400">
                 {userSession.user?.name} ({userSession.user?.role})
               </div>
               <Link
                 href="/login"
-                className="px-3 py-1.5 text-sm bg-slate-800 text-slate-300 rounded hover:bg-slate-700 transition-colors"
+                className="px-3 py-1.5 text-sm bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors"
               >
                 Logout
               </Link>
@@ -192,16 +202,16 @@ export default function DashboardPage() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center gap-2 px-3 py-2 text-sm bg-slate-800 text-slate-300 rounded hover:bg-slate-700 transition-colors"
+              className="flex items-center gap-2 px-3 py-2 text-sm bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors"
             >
               <Filter className="w-4 h-4" />
               <span>Filters</span>
             </button>
-            
+             
             {showFilters && (
               <div className="flex items-center gap-3 flex-1">
                 <div className="flex items-center gap-2 flex-1">
-                  <label className="text-sm text-slate-400 whitespace-nowrap">
+                  <label className="text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">
                     <MapPin className="w-4 h-4 inline mr-1" />
                     State:
                   </label>
@@ -214,7 +224,7 @@ export default function DashboardPage() {
                         router.push(`/state/${stateId}`);
                       }
                     }}
-                    className="flex-1 max-w-xs px-3 py-2 text-sm bg-slate-800 text-white border border-slate-700 rounded focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="flex-1 max-w-xs px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-700 rounded focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   >
                     <option value="">All States (National View)</option>
                     {NIGERIA_STATES.map((state) => (
@@ -225,7 +235,7 @@ export default function DashboardPage() {
                   </select>
                 </div>
                 
-                <div className="text-xs text-slate-500">
+                <div className="text-xs text-slate-600 dark:text-slate-500">
                   {selectedState
                     ? `Showing data for ${NIGERIA_STATES.find(s => s.id === selectedState)?.name}`
                     : 'Showing national data - select a state to drill down'}
@@ -243,75 +253,75 @@ export default function DashboardPage() {
       <main className="max-w-[1920px] mx-auto p-4 space-y-4">
         {/* KPI Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-          <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4">
+          <div className="bg-slate-100 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
-              <Package className="w-5 h-5 text-cyan-400" />
-              <span className="text-xs text-slate-500">Facilities</span>
+              <Package className="w-5 h-5 text-cyan-600 dark:text-cyan-400" />
+              <span className="text-xs text-slate-600 dark:text-slate-500">Facilities</span>
             </div>
-            <div className="text-2xl font-bold text-white">{kpis.totalFacilities}</div>
-            <div className="text-xs text-slate-400 mt-1">Tracked nationwide</div>
+            <div className="text-2xl font-bold text-slate-900 dark:text-white">{kpis.totalFacilities}</div>
+            <div className="text-xs text-slate-600 dark:text-slate-400 mt-1">Tracked nationwide</div>
           </div>
 
-          <div className="bg-slate-900/50 border border-rose-500/30 rounded-lg p-4">
+          <div className="bg-slate-100 dark:bg-slate-900/50 border border-rose-500/30 rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
               <AlertTriangle className="w-5 h-5 text-rose-500" />
-              <span className="text-xs text-slate-500">Critical</span>
+              <span className="text-xs text-slate-600 dark:text-slate-500">Critical</span>
             </div>
             <div className="text-2xl font-bold text-rose-500">{kpis.criticalStock}</div>
-            <div className="text-xs text-slate-400 mt-1">Stockout risk</div>
+            <div className="text-xs text-slate-600 dark:text-slate-400 mt-1">Stockout risk</div>
           </div>
 
-          <div className="bg-slate-900/50 border border-amber-500/30 rounded-lg p-4">
+          <div className="bg-slate-100 dark:bg-slate-900/50 border border-amber-500/30 rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
               <Clock className="w-5 h-5 text-amber-500" />
-              <span className="text-xs text-slate-500">Low Stock</span>
+              <span className="text-xs text-slate-600 dark:text-slate-500">Low Stock</span>
             </div>
             <div className="text-2xl font-bold text-amber-500">{kpis.lowStock}</div>
-            <div className="text-xs text-slate-400 mt-1">{'<'} 3 months supply</div>
+            <div className="text-xs text-slate-600 dark:text-slate-400 mt-1">{'<'} 3 months supply</div>
           </div>
 
-          <div className="bg-slate-900/50 border border-emerald-500/30 rounded-lg p-4">
+          <div className="bg-slate-100 dark:bg-slate-900/50 border border-emerald-500/30 rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
               <Activity className="w-5 h-5 text-emerald-500" />
-              <span className="text-xs text-slate-500">Adequate</span>
+              <span className="text-xs text-slate-600 dark:text-slate-500">Adequate</span>
             </div>
             <div className="text-2xl font-bold text-emerald-500">{kpis.adequateStock}</div>
-            <div className="text-xs text-slate-400 mt-1">Optimal levels</div>
+            <div className="text-xs text-slate-600 dark:text-slate-400 mt-1">Optimal levels</div>
           </div>
 
-          <div className="bg-slate-900/50 border border-cyan-500/30 rounded-lg p-4">
+          <div className="bg-slate-100 dark:bg-slate-900/50 border border-cyan-500/30 rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
               <Package className="w-5 h-5 text-cyan-500" />
-              <span className="text-xs text-slate-500">Overstocked</span>
+              <span className="text-xs text-slate-600 dark:text-slate-500">Overstocked</span>
             </div>
             <div className="text-2xl font-bold text-cyan-500">{kpis.overstocked}</div>
-            <div className="text-xs text-slate-400 mt-1">Excess inventory</div>
+            <div className="text-xs text-slate-600 dark:text-slate-400 mt-1">Excess inventory</div>
           </div>
 
-          <div className="bg-slate-900/50 border border-violet-500/30 rounded-lg p-4">
+          <div className="bg-slate-100 dark:bg-slate-900/50 border border-violet-500/30 rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
               <TrendingUp className="w-5 h-5 text-violet-500" />
-              <span className="text-xs text-slate-500">Coverage</span>
+              <span className="text-xs text-slate-600 dark:text-slate-500">Coverage</span>
             </div>
             <div className="text-2xl font-bold text-violet-500">{kpis.stockCoverage.toFixed(1)}%</div>
-            <div className="text-xs text-slate-400 mt-1">National average</div>
+            <div className="text-xs text-slate-600 dark:text-slate-400 mt-1">National average</div>
           </div>
 
-          <div className="bg-slate-900/50 border border-rose-500/30 rounded-lg p-4">
+          <div className="bg-slate-100 dark:bg-slate-900/50 border border-rose-500/30 rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
               <AlertTriangle className="w-5 h-5 text-rose-500" />
-              <span className="text-xs text-slate-500">Active Alerts</span>
+              <span className="text-xs text-slate-600 dark:text-slate-500">Active Alerts</span>
             </div>
             <div className="text-2xl font-bold text-rose-500">{kpis.totalAlerts}</div>
-            <div className="text-xs text-slate-400 mt-1">{kpis.criticalAlerts} critical</div>
+            <div className="text-xs text-slate-600 dark:text-slate-400 mt-1">{kpis.criticalAlerts} critical</div>
           </div>
         </div>
 
         {/* Neural Map and Side Panels */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 h-[calc(100vh-300px)] min-h-[500px]">
           {/* Crystal Ball - Predictive Insights */}
-          <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4 overflow-hidden flex flex-col">
-            <h3 className="text-sm font-semibold text-violet-400 mb-3 flex items-center gap-2">
+          <div className="bg-slate-100 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-lg p-4 overflow-hidden flex flex-col">
+            <h3 className="text-sm font-semibold text-violet-600 dark:text-violet-400 mb-3 flex items-center gap-2">
               <TrendingUp className="w-4 h-4" />
               Crystal Ball - Predictions
             </h3>
@@ -320,17 +330,17 @@ export default function DashboardPage() {
                 highRiskPredictions.map((prediction) => (
                   <div
                     key={prediction.id}
-                    className="bg-slate-800/50 border border-rose-500/30 rounded p-3 hover:bg-slate-800 transition-colors cursor-pointer"
+                    className="bg-white dark:bg-slate-800/50 border border-rose-500/30 rounded p-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                   >
                     <div className="flex items-start justify-between mb-1">
-                      <span className="text-sm font-medium text-white">{prediction.facilityName}</span>
+                      <span className="text-sm font-medium text-slate-900 dark:text-white">{prediction.facilityName}</span>
                       <span className="text-xs px-2 py-0.5 bg-rose-500/20 text-rose-400 rounded">
                         {prediction.riskLevel}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400 mb-2">{prediction.prediction}</p>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mb-2">{prediction.prediction}</p>
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-500">
+                      <span className="text-slate-600 dark:text-slate-500">
                         Expected: {new Date(prediction.expectedDate).toLocaleDateString()}
                       </span>
                       <span className="text-rose-400">{prediction.confidence}% confidence</span>
@@ -338,21 +348,27 @@ export default function DashboardPage() {
                   </div>
                 ))
               ) : (
-                <div className="text-center text-slate-500 text-sm py-8">No high-risk predictions</div>
+                <div className="text-center text-slate-600 dark:text-slate-500 text-sm py-8">No high-risk predictions</div>
               )}
             </div>
           </div>
 
           {/* Leaflet Map */}
-          <div className="lg:col-span-2 bg-slate-900/50 border border-slate-800 rounded-lg overflow-hidden">
-            <MapErrorBoundary>
-              <NationalViewMap height="100%" />
-            </MapErrorBoundary>
+          <div className="lg:col-span-2 bg-slate-100 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
+            <Suspense fallback={
+              <div className="h-full flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+              </div>
+            }>
+              <MapErrorBoundary>
+                <NationalViewMap height="100%" />
+              </MapErrorBoundary>
+            </Suspense>
           </div>
 
           {/* Transfer Suggestions */}
-          <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4 overflow-hidden flex flex-col">
-            <h3 className="text-sm font-semibold text-cyan-400 mb-3 flex items-center gap-2">
+          <div className="bg-slate-100 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-lg p-4 overflow-hidden flex flex-col">
+            <h3 className="text-sm font-semibold text-cyan-600 dark:text-cyan-400 mb-3 flex items-center gap-2">
               <Package className="w-4 h-4" />
               Transfer Suggestions
             </h3>
@@ -361,22 +377,22 @@ export default function DashboardPage() {
                 topTransferSuggestions.map((suggestion) => (
                   <div
                     key={suggestion.id}
-                    className="bg-slate-800/50 border border-cyan-500/30 rounded p-3 hover:bg-slate-800 transition-colors cursor-pointer"
+                    className="bg-white dark:bg-slate-800/50 border border-cyan-500/30 rounded p-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-medium text-cyan-400">
+                      <span className="text-xs font-medium text-cyan-600 dark:text-cyan-400">
                         {suggestion.fromFacilityName} → {suggestion.toFacilityName}
                       </span>
                       <span className="text-xs text-emerald-400">{suggestion.confidence}%</span>
                     </div>
-                    <p className="text-xs text-white mb-1">{suggestion.productName}</p>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-xs text-slate-900 dark:text-white mb-1">{suggestion.productName}</p>
+                    <p className="text-xs text-slate-600 dark:text-slate-400">
                       Transfer {suggestion.suggestedQuantity} doses ({suggestion.distance}km)
                     </p>
                   </div>
                 ))
               ) : (
-                <div className="text-center text-slate-500 text-sm py-8">No transfer suggestions</div>
+                <div className="text-center text-slate-600 dark:text-slate-500 text-sm py-8">No transfer suggestions</div>
               )}
             </div>
           </div>

@@ -54,7 +54,7 @@ export default function LGAViewPage() {
   const router = useRouter();
   const lgaName = params.lga as string;
   const { userSession } = useVaxTraceStore();
-  const { selectLGA, selectedLGA } = useMapContext();
+  const { selectLGA, selectedLGA, selectedState } = useMapContext();
   const [lgaData, setLGAData] = useState<LGAViewData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -73,128 +73,102 @@ export default function LGAViewPage() {
       }
     }
 
-    fetchLGAData();
-  }, [lgaName, userSession, selectLGA]);
+    // Fetch LGA data after LGA is selected
+    if (selectedLGA) {
+      fetchLGAData();
+    }
+  }, [lgaName, userSession, selectLGA, selectedLGA]);
 
   const fetchLGAData = async () => {
     setIsLoading(true);
     try {
-      // In production, this would fetch from the API
-      // For now, using mock data
-      const mockLGAData: LGAViewData = {
-        lga: lgaName.replace(/-/g, ' '),
-        state: 'Kano',
-        zone: 'North West',
-        totalFacilities: 35,
-        catchmentPopulation: 450000,
-        stockCoverage: 85.2,
-        criticalStock: 2,
-        lowStock: 5,
-        adequateStock: 22,
-        overstocked: 6,
-        activeAlerts: 8,
-        facilities: [
-          {
-            id: 'fac-1',
-            name: 'Primary Health Center Kano Municipal',
-            code: 'PHC-KANO-001',
-            type: 'Primary Health Center',
-            stockStatus: 'ADEQUATE',
-            hasColdChain: true,
-            lastDelivery: '2025-01-25',
-          },
-          {
-            id: 'fac-2',
-            name: 'Dispensary Fagge',
-            code: 'DISP-FAGGE-001',
-            type: 'Dispensary',
-            stockStatus: 'LOW',
-            hasColdChain: true,
-            lastDelivery: '2025-01-20',
-          },
-          {
-            id: 'fac-3',
-            name: 'Health Post Dala',
-            code: 'HP-DALA-001',
-            type: 'Health Post',
-            stockStatus: 'CRITICAL',
-            hasColdChain: false,
-            lastDelivery: '2025-01-10',
-          },
-          {
-            id: 'fac-4',
-            name: 'Maternal & Child Health Center Gwale',
-            code: 'MCH-GWALE-001',
-            type: 'MCH Center',
-            stockStatus: 'ADEQUATE',
-            hasColdChain: true,
-            lastDelivery: '2025-01-22',
-          },
-          {
-            id: 'fac-5',
-            name: 'Primary Health Center Dawakin Kudu',
-            code: 'PHC-DAKIN-001',
-            type: 'Primary Health Center',
-            stockStatus: 'OVERSTOCKED',
-            hasColdChain: true,
-            lastDelivery: '2025-01-18',
-          },
-          {
-            id: 'fac-6',
-            name: 'Dispensary Tudun Wada',
-            code: 'DISP-TUDUN-001',
-            type: 'Dispensary',
-            stockStatus: 'ADEQUATE',
-            hasColdChain: true,
-            lastDelivery: '2025-01-24',
-          },
-          {
-            id: 'fac-7',
-            name: 'Health Post Madobi',
-            code: 'HP-MADOBI-001',
-            type: 'Health Post',
-            stockStatus: 'ADEQUATE',
-            hasColdChain: false,
-            lastDelivery: '2025-01-15',
-          },
-          {
-            id: 'fac-8',
-            name: 'Primary Health Center Kumbotso',
-            code: 'PHC-KUMB-001',
-            type: 'Primary Health Center',
-            stockStatus: 'LOW',
-            hasColdChain: true,
-            lastDelivery: '2025-01-12',
-          },
-        ],
-        recentAlerts: [
-          {
-            id: 'alert-1',
-            facilityName: 'Health Post Dala',
-            type: 'STOCKOUT',
-            severity: 'CRITICAL',
-            message: 'OPV stock depleted - immediate replenishment required',
-            createdAt: '2025-01-30T10:30:00Z',
-          },
-          {
-            id: 'alert-2',
-            facilityName: 'Dispensary Fagge',
-            type: 'EXPIRY',
-            severity: 'HIGH',
-            message: 'BCG batch expiring in 30 days',
-            createdAt: '2025-01-29T14:20:00Z',
-          },
-          {
-            id: 'alert-3',
-            facilityName: 'Primary Health Center Kano Municipal',
-            type: 'COLD_CHAIN',
-            severity: 'MEDIUM',
-            message: 'Refrigerator temperature fluctuation detected',
-            createdAt: '2025-01-28T09:45:00Z',
-          },
-        ],
+      // Use the actual selected LGA from MapContext
+      if (!selectedLGA || !selectedState) {
+        console.error('No LGA or state selected');
+        setIsLoading(false);
+        return;
+      }
+
+      // Generate mock facilities for this LGA (in production, this would come from the API)
+      const facilityTypes = [
+        'Primary Health Center',
+        'Dispensary',
+        'Health Post',
+        'MCH Center',
+        'General Hospital',
+        'Clinic',
+      ];
+      
+      const stockStatuses = ['ADEQUATE', 'LOW', 'CRITICAL', 'OVERSTOCKED'];
+      
+      const numFacilities = Math.floor(Math.random() * 20) + 10; // Random 10-30 facilities
+      const facilities = Array.from({ length: numFacilities }, (_, i) => {
+        const type = facilityTypes[Math.floor(Math.random() * facilityTypes.length)];
+        const stockStatus = stockStatuses[Math.floor(Math.random() * stockStatuses.length)];
+        const hasColdChain = Math.random() > 0.3; // 70% have cold chain
+        
+        // Generate a random date within the last 30 days
+        const lastDelivery = new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .split('T')[0];
+        
+        return {
+          id: `fac-${i + 1}`,
+          name: `${type} ${selectedLGA.name}`,
+          code: `${type.substring(0, 3).toUpperCase()}-${selectedLGA.code}-${String(i + 1).padStart(3, '0')}`,
+          type,
+          stockStatus,
+          hasColdChain,
+          lastDelivery,
+        };
+      });
+
+      // Calculate statistics
+      const criticalStock = facilities.filter((f) => f.stockStatus === 'CRITICAL').length;
+      const lowStock = facilities.filter((f) => f.stockStatus === 'LOW').length;
+      const adequateStock = facilities.filter((f) => f.stockStatus === 'ADEQUATE').length;
+      const overstocked = facilities.filter((f) => f.stockStatus === 'OVERSTOCKED').length;
+      const stockCoverage = Math.round(((adequateStock + overstocked) / numFacilities) * 100);
+
+      // Generate mock alerts for this LGA
+      const alertTypes = [
+        { type: 'STOCKOUT', severity: 'CRITICAL', message: 'OPV stock depleted - immediate replenishment required' },
+        { type: 'EXPIRY', severity: 'HIGH', message: 'BCG batch expiring in 30 days' },
+        { type: 'COLD_CHAIN', severity: 'MEDIUM', message: 'Refrigerator temperature fluctuation detected' },
+        { type: 'LOW_STOCK', severity: 'HIGH', message: 'Pentavalent stock below 1 month supply' },
+      ];
+
+      const numAlerts = Math.floor(Math.random() * 5) + 1;
+      const recentAlerts = Array.from({ length: numAlerts }, (_, i) => {
+        const alert = alertTypes[Math.floor(Math.random() * alertTypes.length)];
+        const facility = facilities[Math.floor(Math.random() * facilities.length)];
+        return {
+          id: `alert-${i + 1}`,
+          facilityName: facility.name,
+          type: alert.type,
+          severity: alert.severity,
+          message: alert.message,
+          createdAt: new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString(),
+        };
+      });
+
+      const lgaData: LGAViewData = {
+        lga: selectedLGA.name,
+        state: selectedState.name,
+        zone: 'Nigeria', // In production, this would come from the state data
+        totalFacilities: numFacilities,
+        catchmentPopulation: Math.floor(Math.random() * 400000) + 100000, // Random 100k-500k
+        stockCoverage,
+        criticalStock,
+        lowStock,
+        adequateStock,
+        overstocked,
+        activeAlerts: numAlerts,
+        facilities,
+        recentAlerts,
       };
-      setLGAData(mockLGAData);
+      
+      setLGAData(lgaData);
     } catch (error) {
       console.error('Error fetching LGA data:', error);
     } finally {

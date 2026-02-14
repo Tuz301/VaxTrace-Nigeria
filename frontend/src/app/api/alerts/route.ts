@@ -131,35 +131,54 @@ export async function GET(request: NextRequest) {
     }
     
     const { severity, type, state, active } = validationResult.data;
-    let filteredAlerts = [...mockAlerts];
 
+    // Fetch alerts from backend API
+    const response = await fetch('/api/v1/alerts', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch alerts from backend');
+    }
+
+    const result = await response.json();
+
+    // Return alerts from backend
+    let filteredAlerts = result.data?.alerts || [];
+
+    // Apply additional filters from query parameters
     // Filter by active status
-    if (active) {
-      filteredAlerts = filteredAlerts.filter((alert) => !alert.resolvedAt);
+    if (active !== undefined) {
+      filteredAlerts = filteredAlerts.filter((alert: Alert) =>
+        (active ? !alert.resolvedAt : true)
+      );
     }
 
     // Filter by severity
     if (severity) {
-      filteredAlerts = filteredAlerts.filter((alert) => alert.severity === severity);
+      filteredAlerts = filteredAlerts.filter((alert: Alert) => alert.severity === severity);
     }
 
     // Filter by type
     if (type) {
-      filteredAlerts = filteredAlerts.filter((alert) => alert.type === type);
+      filteredAlerts = filteredAlerts.filter((alert: Alert) => alert.type === type);
     }
 
     // Filter by state
     if (state) {
-      filteredAlerts = filteredAlerts.filter((alert) => alert.state === state);
+      filteredAlerts = filteredAlerts.filter((alert: Alert) => alert.state === state);
     }
 
     // Sort by severity (CRITICAL first) and then by creation date (newest first)
-    const severityOrder = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
-    filteredAlerts.sort((a, b) => {
+    const severityOrder: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+    filteredAlerts.sort((a: Alert, b: Alert) => {
       if (a.severity !== b.severity) {
-        return severityOrder[a.severity] - severityOrder[b.severity];
+        return (severityOrder[a.severity] ?? 99) - (severityOrder[b.severity] ?? 99);
       }
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
     });
 
     return NextResponse.json({

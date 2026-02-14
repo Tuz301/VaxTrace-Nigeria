@@ -73,7 +73,7 @@ export function IsSanitized(validationOptions?: ValidationOptions) {
       options: validationOptions,
       validator: {
         validate(value: any) {
-          // Sanitization happens in the transform decorator
+          // Sanitization happens in transform decorator
           return true;
         },
         defaultMessage(args: ValidationArguments) {
@@ -113,7 +113,7 @@ export function sanitizeEmail(value: any): any {
   let sanitized = value.toLowerCase().trim();
   
   // Remove any potentially dangerous characters
-  sanitized = sanitized.replace(/[<>"';()&+]/g, '');
+  sanitized = sanitized.replace(/[<>"'()&+]/g, '');
   
   return sanitized;
 }

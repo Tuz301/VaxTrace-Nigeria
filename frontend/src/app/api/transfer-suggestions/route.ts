@@ -189,19 +189,36 @@ export async function GET(request: NextRequest) {
     }
     
     const { priority, state, vaccineCode } = validationResult.data;
-    let filteredSuggestions = [...mockTransferSuggestions];
 
+    // Fetch transfer suggestions from backend API
+    const response = await fetch('/api/v1/transfer-suggestions', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch transfer suggestions from backend');
+    }
+
+    const result = await response.json();
+
+    // Return transfer suggestions from backend
+    let filteredSuggestions = result.data?.suggestions || [];
+
+    // Apply additional filters from query parameters
     // Filter by priority
     if (priority) {
       filteredSuggestions = filteredSuggestions.filter(
-        (suggestion) => suggestion.priority === priority
+        (suggestion: any) => suggestion.priority === priority
       );
     }
 
     // Filter by source or target state
     if (state) {
       filteredSuggestions = filteredSuggestions.filter(
-        (suggestion) =>
+        (suggestion: TransferSuggestion) =>
           suggestion.sourceFacility.state === state ||
           suggestion.targetFacility.state === state
       );
@@ -210,17 +227,17 @@ export async function GET(request: NextRequest) {
     // Filter by vaccine code
     if (vaccineCode) {
       filteredSuggestions = filteredSuggestions.filter(
-        (suggestion) => suggestion.vaccineCode === vaccineCode
+        (suggestion: TransferSuggestion) => suggestion.vaccineCode === vaccineCode
       );
     }
 
     // Sort by priority (HIGH first) and then by creation date (newest first)
-    const priorityOrder = { HIGH: 0, MEDIUM: 1, LOW: 2 };
-    filteredSuggestions.sort((a, b) => {
+    const priorityOrder: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
+    filteredSuggestions.sort((a: TransferSuggestion, b: TransferSuggestion) => {
       if (a.priority !== b.priority) {
-        return priorityOrder[a.priority] - priorityOrder[b.priority];
+        return (priorityOrder[a.priority] ?? 99) - (priorityOrder[b.priority] ?? 99);
       }
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
     });
 
     return NextResponse.json({

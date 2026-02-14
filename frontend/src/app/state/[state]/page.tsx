@@ -68,64 +68,89 @@ export default function StateViewPage() {
       selectState(state.id);
     }
 
-    fetchStateData();
-  }, [stateName, userSession, selectState]);
+    // Fetch state data after state is selected
+    if (selectedState) {
+      fetchStateData();
+    }
+  }, [stateName, userSession, selectState, selectedState]);
 
   const fetchStateData = async () => {
     setIsLoading(true);
     try {
-      // In production, this would fetch from the API
-      // For now, using mock data
-      const mockStateData: StateViewData = {
-        state: stateName.replace(/-/g, ' '),
-        zone: 'North West',
-        totalFacilities: 485,
-        totalLgas: 44,
-        catchmentPopulation: 15800000,
-        stockCoverage: 78.5,
-        criticalStock: 23,
-        lowStock: 67,
-        adequateStock: 312,
-        overstocked: 83,
-        activeAlerts: 45,
-        lgas: [
-          { name: 'Kano Municipal', facilities: 35, criticalStock: 2, stockCoverage: 85.2 },
-          { name: 'Nassarawa', facilities: 28, criticalStock: 1, stockCoverage: 82.1 },
-          { name: 'Fagge', facilities: 22, criticalStock: 3, stockCoverage: 71.5 },
-          { name: 'Dala', facilities: 31, criticalStock: 2, stockCoverage: 79.3 },
-          { name: 'Gwale', facilities: 25, criticalStock: 1, stockCoverage: 84.7 },
-          { name: 'Dawakin Kudu', facilities: 18, criticalStock: 0, stockCoverage: 88.2 },
-          { name: 'Tudun Wada', facilities: 20, criticalStock: 1, stockCoverage: 76.8 },
-          { name: 'Madobi', facilities: 15, criticalStock: 0, stockCoverage: 91.5 },
-        ],
-        recentAlerts: [
-          {
-            id: 'alert-1',
-            facilityName: 'PHC Kano Municipal',
-            type: 'STOCKOUT',
-            severity: 'CRITICAL',
-            message: 'Pentavalent stock below 1 month supply',
-            createdAt: '2025-01-30T10:30:00Z',
-          },
-          {
-            id: 'alert-2',
-            facilityName: 'Dispensary Fagge',
-            type: 'COLD_CHAIN',
-            severity: 'HIGH',
-            message: 'Refrigerator temperature above safe range',
-            createdAt: '2025-01-30T09:15:00Z',
-          },
-          {
-            id: 'alert-3',
-            facilityName: 'Health Post Dala',
-            type: 'EXPIRY',
-            severity: 'MEDIUM',
-            message: 'OPV batch expiring in 45 days',
-            createdAt: '2025-01-29T16:45:00Z',
-          },
-        ],
+      // Use the actual selected state from MapContext
+      if (!selectedState) {
+        console.error('No state selected');
+        setIsLoading(false);
+        return;
+      }
+
+      // Generate dynamic data based on the actual state's LGAs
+      const stateLGAs = selectedState.lgas;
+      const totalLgas = stateLGAs.length;
+      
+      // Generate mock data for each LGA (in production, this would come from the API)
+      const lgaData = stateLGAs.map((lga) => ({
+        name: lga.name,
+        facilities: Math.floor(Math.random() * 30) + 10, // Random facilities between 10-40
+        criticalStock: Math.floor(Math.random() * 5), // Random critical stock 0-4
+        stockCoverage: Math.floor(Math.random() * 30) + 65, // Random coverage 65-95%
+      }));
+
+      // Calculate totals
+      const totalFacilities = lgaData.reduce((sum, lga) => sum + lga.facilities, 0);
+      const criticalStock = lgaData.reduce((sum, lga) => sum + lga.criticalStock, 0);
+      const avgStockCoverage = Math.round(
+        lgaData.reduce((sum, lga) => sum + lga.stockCoverage, 0) / totalLgas
+      );
+      const lowStock = lgaData.filter((lga) => lga.stockCoverage < 80 && lga.stockCoverage >= 60).length;
+      const adequateStock = lgaData.filter((lga) => lga.stockCoverage >= 80).length;
+      const overstocked = lgaData.filter((lga) => lga.stockCoverage > 95).length;
+
+      // Generate mock alerts for the state
+      const recentAlerts = [
+        {
+          id: 'alert-1',
+          facilityName: `PHC ${stateLGAs[0]?.name || 'Main'}`,
+          type: 'STOCKOUT',
+          severity: 'CRITICAL',
+          message: 'Pentavalent stock below 1 month supply',
+          createdAt: new Date().toISOString(),
+        },
+        {
+          id: 'alert-2',
+          facilityName: `Dispensary ${stateLGAs[1]?.name || 'Central'}`,
+          type: 'COLD_CHAIN',
+          severity: 'HIGH',
+          message: 'Refrigerator temperature above safe range',
+          createdAt: new Date(Date.now() - 86400000).toISOString(),
+        },
+        {
+          id: 'alert-3',
+          facilityName: `Health Post ${stateLGAs[2]?.name || 'North'}`,
+          type: 'EXPIRY',
+          severity: 'MEDIUM',
+          message: 'OPV batch expiring in 45 days',
+          createdAt: new Date(Date.now() - 172800000).toISOString(),
+        },
+      ];
+
+      const stateData: StateViewData = {
+        state: selectedState.name,
+        zone: 'Nigeria', // In production, this would come from the state data
+        totalFacilities,
+        totalLgas,
+        catchmentPopulation: Math.floor(Math.random() * 10000000) + 2000000, // Random population
+        stockCoverage: avgStockCoverage,
+        criticalStock,
+        lowStock,
+        adequateStock,
+        overstocked,
+        activeAlerts: recentAlerts.length,
+        lgas: lgaData,
+        recentAlerts,
       };
-      setStateData(mockStateData);
+      
+      setStateData(stateData);
     } catch (error) {
       console.error('Error fetching state data:', error);
     } finally {

@@ -1,3 +1,4 @@
+// Root page - redirects to login
 import { redirect } from 'next/navigation';
 import { Metadata } from 'next';
 
