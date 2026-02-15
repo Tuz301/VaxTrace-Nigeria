@@ -37,7 +37,7 @@ import {
 // ============================================
 
 @ApiTags('Predictive Insights')
-@Controller('api/v1/predictive-insights')
+@Controller('predictive-insights')
 export class PredictiveInsightsController {
   private readonly logger = new Logger(PredictiveInsightsController.name);
 

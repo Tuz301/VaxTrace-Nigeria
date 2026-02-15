@@ -132,13 +132,17 @@ export class OpenLMISService implements OnModuleInit, OnModuleDestroy {
     const password = this.configService.get<string>('OPENLMIS_PASSWORD');
 
     if (!clientId || !clientSecret || !username || !password ||
-        clientId === 'your_openlmis_api_key_here' ||
-        password === 'your_service_account_password_here') {
+          clientId === 'your_openlmis_api_key_here' ||
+          password === 'your_service_account_password_here') {
       this.logger.warn('OpenLMIS credentials not configured. Service will run in mock mode.');
       this.mockMode = true;
       this.logger.log('OpenLMIS Service initialized in mock mode');
       return;
     }
+
+    // Real mode - credentials are properly configured
+    this.mockMode = false;
+    this.logger.log('OpenLMIS Service initialized in real mode');
     
     // Initial token fetch
     await this.ensureValidToken();

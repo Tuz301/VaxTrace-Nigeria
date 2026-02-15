@@ -27,7 +27,7 @@ import {
 // ============================================
 
 @ApiTags('Delivery')
-@Controller('api/v1/delivery')
+@Controller('delivery')
 export class DeliveryController {
   private readonly logger = new Logger(DeliveryController.name);
 

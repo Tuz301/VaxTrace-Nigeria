@@ -11,7 +11,7 @@ import { LMDService } from './lmd.service';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
 @ApiTags('lmd')
-@Controller('api/lmd')
+@Controller('lmd')
 export class LMDController {
   constructor(private readonly lmdService: LMDService) {}
 

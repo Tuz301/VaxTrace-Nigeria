@@ -430,7 +430,7 @@ export const useVaxTraceStore = create<VaxTraceState & VaxTraceActions>()(
         fetchPredictiveInsights: async () => {
           set({ insightsLoading: true });
           try {
-            const response = await fetch('/api/predictive-insights');
+            const response = await fetch('/api/v1/predictive-insights');
             const json = await response.json();
             set({ predictiveInsights: json.data || [], insightsLoading: false });
           } catch (error) {
@@ -446,7 +446,7 @@ export const useVaxTraceStore = create<VaxTraceState & VaxTraceActions>()(
 
         fetchTransferSuggestions: async () => {
           try {
-            const response = await fetch('/api/transfer-suggestions');
+            const response = await fetch('/api/v1/transfer-suggestions');
             const json = await response.json();
             set({ transferSuggestions: json.data || [] });
           } catch (error) {
@@ -513,7 +513,7 @@ export const useVaxTraceStore = create<VaxTraceState & VaxTraceActions>()(
               headers['If-None-Match'] = state.lastETag;
             }
             
-            const response = await fetch('/api/stock', {
+            const response = await fetch('/api/v1/stock', {
               headers,
             });
             
@@ -558,7 +558,7 @@ export const useVaxTraceStore = create<VaxTraceState & VaxTraceActions>()(
           set({ alertsLoading: true, alertsError: null });
           
           try {
-            const response = await fetch('/api/alerts', {
+            const response = await fetch('/api/v1/alerts', {
               headers: {
                 'Content-Type': 'application/json',
               },

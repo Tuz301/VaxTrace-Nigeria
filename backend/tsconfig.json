@@ -19,7 +19,7 @@
     "noFallthroughCasesInSwitch": false,
     "esModuleInterop": true,
     "resolveJsonModule": true,
-    "types": ["node"]
+    "types": ["node", "jest"]
   },
   "include": [
     "src/**/*"
@@ -27,6 +27,8 @@
   "exclude": [
     "node_modules",
     "dist",
-    "test"
+    "test",
+    "src/**/*.spec.ts",
+    "src/**/*.test.ts"
   ]
 }

@@ -34,7 +34,7 @@ import {
 // ============================================
 
 @ApiTags('Authentication')
-@Controller('api/v1/auth')
+@Controller('auth')
 export class AuthController {
   private readonly logger = new Logger(AuthController.name);
 

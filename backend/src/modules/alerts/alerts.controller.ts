@@ -29,7 +29,7 @@ import {
 // ============================================
 
 @ApiTags('Alerts')
-@Controller('api/v1/alerts')
+@Controller('alerts')
 export class AlertsController {
   private readonly logger = new Logger(AlertsController.name);
 

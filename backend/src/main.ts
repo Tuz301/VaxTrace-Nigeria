@@ -20,6 +20,7 @@ async function bootstrap() {
   initSentry();
   
   const logger = new Logger('Bootstrap');
+  logger.log('Starting VaxTrace Nigeria backend...');
   
   const app = await NestFactory.create(AppModule, {
     logger: ['log', 'error', 'warn', 'debug', 'verbose'],
@@ -27,12 +28,7 @@ async function bootstrap() {
 
   const configService = app.get(ConfigService);
   const port = configService.get<number>('PORT') || 3001;
-
-  // FIX #15: API Versioning Strategy
-  app.enableVersioning({
-    type: VersioningType.URI,
-    defaultVersion: '1',
-  });
+  logger.log(`Configuration loaded. Port: ${port}, NODE_ENV: ${configService.get('NODE_ENV')}`);
 
   // Security middleware
   app.use(helmet({
@@ -79,14 +75,22 @@ async function bootstrap() {
   });
 
   // Global prefix
-  app.setGlobalPrefix('api', {
-    exclude: ['/health', '/metrics'],
+  app.setGlobalPrefix('api');
+
+  // FIX #15: API Versioning Strategy
+  // Note: Versioning is applied AFTER global prefix, so routes become /api/v1/...
+  // Health endpoints are excluded from versioning in the controller itself
+  app.enableVersioning({
+    type: VersioningType.URI,
+    defaultVersion: '1',
   });
 
   // FIX #12: Graceful Shutdown
   setupGracefulShutdown(app, logger);
 
+  logger.log(`About to listen on port ${port}...`);
   await app.listen(port);
+  logger.log(`Successfully listening on port ${port}`);
 
   logger.log(`
 ╔═══════════════════════════════════════════════════════════════════╗
@@ -153,3 +157,4 @@ bootstrap().catch((error) => {
   console.error('Error starting application:', error);
   process.exit(1);
 });
+ 

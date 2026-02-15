@@ -18,11 +18,11 @@
 'use client';
 
 import React, { useRef, useEffect, useState, useCallback, useMemo } from "react";
-import L, { Map as LeafletMapInstance, LatLngBounds, LatLngBoundsExpression, LatLngExpression } from 'leaflet';
 import { useStockData, useMapState } from '@/store/useVaxTraceStore';
 import { nigeriaStates, LGA, HealthFacility } from '@/data/nigeria-geospatial';
 import { cn } from '@/lib/utils';
 import { VaxTraceStockData } from '@/store/useVaxTraceStore';
+import L, { LatLngBoundsExpression, LatLngBounds, LatLngExpression, Map as LeafletMapInstance } from 'leaflet';
 
 import 'leaflet/dist/leaflet.css';
 import '@/styles/leaflet.css';
