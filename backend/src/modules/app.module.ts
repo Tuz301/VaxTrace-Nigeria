@@ -9,6 +9,8 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 import { CacheModule } from './cache/cache.module';
 import { OpenLMISModule } from './openlmis/openlmis.module';
 import { ProtobufModule } from './protobuf/protobuf.module';
@@ -52,6 +54,12 @@ import { PredictiveInsightsModule } from './predictive-insights/predictive-insig
     // Schedule module for cron jobs
     ScheduleModule.forRoot(),
 
+    // Rate limiting to prevent abuse
+    ThrottlerModule.forRoot([{
+      ttl: 60000, // Time window in milliseconds (1 minute)
+      limit: 100, // Max requests per time window
+    }]),
+
     // Feature modules
     CacheModule,
     OpenLMISModule,
@@ -66,7 +74,13 @@ import { PredictiveInsightsModule } from './predictive-insights/predictive-insig
     PredictiveInsightsModule,
   ],
   controllers: [],
-  providers: [],
+  providers: [
+    // Apply rate limiting globally to all routes
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
   exports: [],
 })
 export class AppModule {

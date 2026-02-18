@@ -45,6 +45,70 @@ export interface OpenLMISFacility {
   }>;
 }
 
+// Nigeria OpenLMIS Stock Card Response (paginated)
+export interface OpenLMISStockCardResponse {
+  content: OpenLMISStockCard[];
+  pageable: {
+    pageNumber: number;
+    pageSize: number;
+    totalPages: number;
+  };
+  totalElements: number;
+  first: boolean;
+  last: boolean;
+}
+
+export interface OpenLMISStockCard {
+  id: string;
+  stockOnHand: number;
+  facility: {
+    id: string;
+    code: string;
+    name: string;
+    description?: string;
+    active: boolean;
+    geographicZone: {
+      id: string;
+      code: string;
+      name: string;
+      level: { levelNumber: number };
+      parent?: {
+        id: string;
+        code: string;
+        name: string;
+        parent?: {
+          id: string;
+          code: string;
+          name: string;
+        };
+      };
+    };
+    type: {
+      id: string;
+      code: string;
+      name: string;
+    };
+  };
+  program: {
+    id: string;
+    code: string;
+    name: string;
+  };
+  orderable: {
+    id: string;
+    productCode?: string;
+    fullProductName?: string;
+    children?: any[];
+  };
+  lot: {
+    id: string;
+    lotCode?: string;
+    expiryDate?: string;
+  };
+  occurredDate: string;
+}
+
+// Legacy type for backward compatibility
 export interface OpenLMISStockOnHand {
   id: string;
   facility: {
@@ -97,13 +161,22 @@ export interface VaxTraceFacility {
   programs: string[];
 }
 
+// Match shared types format for consistency
 export interface VaxTraceStockData {
-  facilityId: string;
+  nodeId: string;
   facilityName: string;
   facilityCode: string;
+  state: string;
+  lga: string;
   productCode: string;
   productName: string;
-  stockOnHand: number;
+  quantity: number;
+  lotCode: string;
+  lotExpiry: string;
+  expiryRisk: 'LOW' | 'MEDIUM' | 'HIGH' | 'EXPIRED';
+  vvmStage: number;
+  vvmStatus: 'HEALTHY' | 'WARNING' | 'CRITICAL';
+  monthsOfStock: number;
   lastUpdated: string;
 }
 
@@ -219,11 +292,12 @@ export class OpenLMISAPIClientService {
 
   /**
    * Fetch stock on hand data
+   * NOTE: Nigeria OpenLMIS instance uses /stockCards endpoint
    */
   async getStockOnHand(facilityId?: string): Promise<VaxTraceStockData[]> {
     const endpoint = facilityId
-      ? `/stockOnHand?facilityId=${facilityId}&pageSize=1000`
-      : '/stockOnHand?pageSize=10000';
+      ? `/stockCards?facilityId=${facilityId}&pageSize=1000`
+      : '/stockCards?pageSize=10000';
     
     const cacheKey = `openlmis:stock:${facilityId || 'all'}`;
     
@@ -237,12 +311,13 @@ export class OpenLMISAPIClientService {
 
   /**
    * Get aggregated stock data for a state
+   * NOTE: Nigeria OpenLMIS instance uses /stockCards endpoint
    */
   async getAggregatedStockByState(stateCode: string): Promise<any> {
     const cacheKey = `openlmis:stock:aggregated:state:${stateCode}`;
     
     return this.fetchWithCache(
-      `/stockOnHand/aggregate?geoZoneCode=${stateCode}&geoZoneLevel=STATE`,
+      `/stockCards?geoZoneCode=${stateCode}&geoZoneLevel=STATE&pageSize=1000`,
       cacheKey,
       this.CACHE_TTL.AGGREGATED_STOCK,
     );
@@ -250,12 +325,13 @@ export class OpenLMISAPIClientService {
 
   /**
    * Get national stock aggregation
+   * NOTE: Nigeria OpenLMIS instance uses /stockCards endpoint
    */
   async getNationalStockAggregation(): Promise<any> {
     const cacheKey = 'openlmis:stock:aggregated:national';
     
     return this.fetchWithCache(
-      '/stockOnHand/aggregate',
+      '/stockCards?pageSize=10000',
       cacheKey,
       this.CACHE_TTL.AGGREGATED_STOCK,
     );
@@ -301,17 +377,69 @@ export class OpenLMISAPIClientService {
 
   /**
    * Normalize OpenLMIS stock data to VaxTrace format
+   * Handles both paginated response (Nigeria) and direct array (demo server)
    */
-  private normalizeStockData(stockData: OpenLMISStockOnHand[]): VaxTraceStockData[] {
-    return stockData.map((stock) => ({
-      facilityId: stock.facility.id,
-      facilityName: stock.facility.name,
-      facilityCode: stock.facility.code,
-      productCode: stock.orderable.code,
-      productName: stock.orderable.fullProductName || stock.orderable.name,
-      stockOnHand: stock.stockOnHandBaseUnit,
-      lastUpdated: stock.occurredDate,
-    }));
+  private normalizeStockData(response: OpenLMISStockCardResponse | OpenLMISStockOnHand[]): VaxTraceStockData[] {
+    // Extract content array from paginated response or use direct array
+    const stockData = Array.isArray(response)
+      ? response
+      : (response as OpenLMISStockCardResponse).content;
+
+    return stockData.map((stock: any) => {
+      // Handle Nigeria Stock Card format
+      if (stock.facility && stock.program && stock.orderable) {
+        const stateName = stock.facility.geographicZone?.parent?.name || '';
+        const lgaName = stock.facility.geographicZone?.name || '';
+        const lotExpiry = stock.lot?.expiryDate || '';
+        
+        // Calculate expiry risk
+        const now = new Date();
+        const expiryDate = lotExpiry ? new Date(lotExpiry) : null;
+        const daysUntilExpiry = expiryDate ? Math.floor((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : 999;
+        
+        const expiryRisk: 'LOW' | 'MEDIUM' | 'HIGH' | 'EXPIRED' =
+          daysUntilExpiry < 0 ? 'EXPIRED' :
+          daysUntilExpiry < 30 ? 'HIGH' :
+          daysUntilExpiry < 90 ? 'MEDIUM' : 'LOW';
+
+        return {
+          nodeId: stock.facility.id,
+          facilityName: stock.facility.name,
+          facilityCode: stock.facility.code,
+          state: stateName,
+          lga: lgaName,
+          productCode: stock.orderable.productCode || stock.orderable.id,
+          productName: stock.orderable.fullProductName || stock.program.name,
+          quantity: stock.stockOnHand || 0,
+          lotCode: stock.lot?.lotCode || '',
+          lotExpiry: lotExpiry,
+          expiryRisk: expiryRisk,
+          vvmStage: 1,
+          vvmStatus: 'HEALTHY' as const,
+          monthsOfStock: 0,
+          lastUpdated: stock.occurredDate || new Date().toISOString(),
+        };
+      }
+      
+      // Handle legacy OpenLMIS StockOnHand format
+      return {
+        nodeId: stock.facility.id,
+        facilityName: stock.facility.name,
+        facilityCode: stock.facility.code,
+        state: '',
+        lga: '',
+        productCode: stock.orderable.code,
+        productName: stock.orderable.fullProductName || stock.orderable.name,
+        quantity: stock.stockOnHandBaseUnit || stock.stockOnHand,
+        lotCode: '',
+        lotExpiry: '',
+        expiryRisk: 'LOW' as const,
+        vvmStage: 1,
+        vvmStatus: 'HEALTHY' as const,
+        monthsOfStock: 0,
+        lastUpdated: stock.occurredDate,
+      };
+    });
   }
 
   /**

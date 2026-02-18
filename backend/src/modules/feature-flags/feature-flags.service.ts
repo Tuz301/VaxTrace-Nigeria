@@ -1,124 +1,181 @@
 /**
  * VaxTrace Nigeria - Feature Flags Service
  * 
- * FIX #20: Feature Flags
- * Enables/disables features dynamically without deployment
+ * Simple feature flag implementation for dynamic feature rollout.
+ * Supports environment-based and user-based feature toggling.
  */
 
 import { Injectable, Logger } from '@nestjs/common';
-import { CacheService } from '../cache/cache.service';
+import { ConfigService } from '@nestjs/config';
 
 export interface FeatureFlag {
-  name: string;
+  key: string;
   enabled: boolean;
   description: string;
   rolloutPercentage?: number;
-  whitelist?: string[];
 }
 
 @Injectable()
 export class FeatureFlagsService {
   private readonly logger = new Logger(FeatureFlagsService.name);
-  private readonly FLAG_PREFIX = 'vax:feature:';
+  private flags: Map<string, FeatureFlag>;
 
-  // Default feature flags
-  private readonly defaultFlags: Record<string, FeatureFlag> = {
-    'dashboard-analytics': {
-      name: 'dashboard-analytics',
+  // Feature flags definition
+  private readonly featureFlags: FeatureFlag[] = [
+    {
+      key: 'OPENLMIS_INTEGRATION',
       enabled: true,
-      description: 'Enable advanced analytics dashboard',
+      description: 'Enable OpenLMIS data integration',
     },
-    'offline-mode': {
-      name: 'offline-mode',
+    {
+      key: 'REALTIME_SYNC',
       enabled: true,
-      description: 'Enable offline PWA mode',
+      description: 'Enable real-time WebSocket sync',
     },
-    'real-time-updates': {
-      name: 'real-time-updates',
+    {
+      key: 'ML_PREDICTIONS',
       enabled: true,
-      description: 'Enable real-time stock updates',
+      description: 'Enable ML-based stock predictions',
     },
-    'advanced-filters': {
-      name: 'advanced-filters',
+    {
+      key: 'ADVANCED_ANALYTICS',
       enabled: false,
-      description: 'Enable advanced filtering options',
+      description: 'Enable advanced analytics dashboard',
+      rolloutPercentage: 50,
     },
-    'export-reports': {
-      name: 'export-reports',
+    {
+      key: 'BATCH_EXPORT',
       enabled: true,
-      description: 'Enable report export functionality',
+      description: 'Enable batch data export',
     },
-  };
+    {
+      key: 'MOBILE_OPTIMIZATIONS',
+      enabled: true,
+      description: 'Enable mobile-specific optimizations',
+    },
+    {
+      key: 'DARK_MODE',
+      enabled: true,
+      description: 'Enable dark mode theme',
+    },
+    {
+      key: 'BIOMETRIC_AUTH',
+      enabled: false,
+      description: 'Enable biometric authentication',
+      rolloutPercentage: 10,
+    },
+  ];
 
-  constructor(private readonly cacheService: CacheService) {}
+  constructor(private readonly configService: ConfigService) {
+    this.flags = new Map();
+    this.initializeFlags();
+  }
 
   /**
-   * Check if a feature is enabled
+   * Initialize feature flags from config and defaults
    */
-  async isEnabled(featureName: string, userId?: string): Promise<boolean> {
-    const flag = await this.getFlag(featureName);
-    
+  private initializeFlags(): void {
+    for (const flag of this.featureFlags) {
+      // Check if flag is overridden by environment variable
+      const envValue = this.configService.get<string>(`FEATURE_FLAG_${flag.key}`);
+      
+      if (envValue !== undefined) {
+        flag.enabled = envValue === 'true' || envValue === '1';
+      }
+
+      this.flags.set(flag.key, flag);
+      this.logger.debug(`Feature flag ${flag.key}: ${flag.enabled}`);
+    }
+  }
+
+  /**
+   * Check if a feature flag is enabled
+   */
+  isEnabled(key: string, userId?: string): boolean {
+    const flag = this.flags.get(key);
+
     if (!flag) {
-      this.logger.warn(`Feature flag not found: ${featureName}`);
+      this.logger.warn(`Unknown feature flag: ${key}`);
       return false;
     }
 
+    // If flag is explicitly enabled/disabled
+    if (flag.rolloutPercentage === undefined) {
+      return flag.enabled;
+    }
+
+    // For percentage-based rollouts
     if (!flag.enabled) {
       return false;
     }
 
-    // Check rollout percentage
-    if (flag.rolloutPercentage && userId) {
+    // Use user ID for consistent rollout
+    if (userId) {
       const hash = this.hashUserId(userId);
-      return hash < flag.rolloutPercentage;
+      return (hash % 100) < flag.rolloutPercentage!;
     }
 
-    // Check whitelist
-    if (flag.whitelist && userId) {
-      return flag.whitelist.includes(userId);
-    }
-
-    return true;
-  }
-
-  /**
-   * Get a feature flag
-   */
-  async getFlag(featureName: string): Promise<FeatureFlag | null> {
-    const key = `${this.FLAG_PREFIX}${featureName}`;
-    const cached = await this.cacheService.get<FeatureFlag>(key);
-    
-    if (cached) {
-      return cached;
-    }
-
-    // Return default flag if exists
-    return this.defaultFlags[featureName] || null;
-  }
-
-  /**
-   * Set a feature flag
-   */
-  async setFlag(flag: FeatureFlag): Promise<void> {
-    const key = `${this.FLAG_PREFIX}${flag.name}`;
-    await this.cacheService.set(key, flag, { ttl: 24 * 60 * 60 }); // 24 hour TTL
-    this.logger.log(`Feature flag updated: ${flag.name} = ${flag.enabled}`);
+    // Random rollout (not recommended for production)
+    return Math.random() * 100 < flag.rolloutPercentage!;
   }
 
   /**
    * Get all feature flags
    */
-  async getAllFlags(): Promise<FeatureFlag[]> {
-    return Object.values(this.defaultFlags);
+  getAllFlags(): FeatureFlag[] {
+    return Array.from(this.flags.values());
   }
 
+  /**
+   * Get a specific feature flag
+   */
+  getFlag(key: string): FeatureFlag | undefined {
+    return this.flags.get(key);
+  }
+
+  /**
+   * Enable a feature flag at runtime
+   */
+  enableFlag(key: string): void {
+    const flag = this.flags.get(key);
+    if (flag) {
+      flag.enabled = true;
+      this.logger.log(`Feature flag ${key} enabled`);
+    }
+  }
+
+  /**
+   * Disable a feature flag at runtime
+   */
+  disableFlag(key: string): void {
+    const flag = this.flags.get(key);
+    if (flag) {
+      flag.enabled = false;
+      this.logger.log(`Feature flag ${key} disabled`);
+    }
+  }
+
+  /**
+   * Set feature flag rollout percentage
+   */
+  setRolloutPercentage(key: string, percentage: number): void {
+    const flag = this.flags.get(key);
+    if (flag) {
+      flag.rolloutPercentage = Math.min(100, Math.max(0, percentage));
+      this.logger.log(`Feature flag ${key} rollout set to ${flag.rolloutPercentage}%`);
+    }
+  }
+
+  /**
+   * Hash user ID for consistent rollout
+   */
   private hashUserId(userId: string): number {
     let hash = 0;
     for (let i = 0; i < userId.length; i++) {
       const char = userId.charCodeAt(i);
       hash = ((hash << 5) - hash) + char;
-      hash = hash & hash;
+      hash = hash & hash; // Convert to 32-bit integer
     }
-    return Math.abs(hash) % 100;
+    return Math.abs(hash);
   }
 }

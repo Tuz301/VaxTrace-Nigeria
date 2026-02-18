@@ -94,8 +94,7 @@ export class JwtMiddleware implements NestMiddleware {
     const publicRoutes = [
       '/health',
       '/metrics',
-      '/api/v1/openlmis/health',
-      '/api/v1/openlmis/sync/status',
+      '/api/v1/openlmis', // All OpenLMIS routes are public (use internal OAuth2)
       '/api/auth/login',
       '/api/auth/refresh',
       '/api/webhooks',

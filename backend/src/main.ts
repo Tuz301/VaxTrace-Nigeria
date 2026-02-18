@@ -11,6 +11,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './modules/app.module';
 import { initSentry } from './sentry';
@@ -85,6 +86,9 @@ async function bootstrap() {
     defaultVersion: '1',
   });
 
+  // Swagger API Documentation
+  setupSwagger(app, configService);
+
   // FIX #12: Graceful Shutdown
   setupGracefulShutdown(app, logger);
 
@@ -151,6 +155,83 @@ function setupGracefulShutdown(app: any, logger: Logger): void {
     logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
     // Don't exit, just log
   });
+}
+
+/**
+ * Setup Swagger API Documentation
+ * Provides interactive API documentation at /api/docs
+ */
+function setupSwagger(app: any, configService: ConfigService): void {
+  const isProduction = configService.get('NODE_ENV') === 'production';
+  
+  // Skip Swagger in production for security (can be enabled if needed)
+  if (isProduction && !configService.get('ENABLE_SWAGGER_IN_PRODUCTION')) {
+    return;
+  }
+
+  const config = new DocumentBuilder()
+    .setTitle('VaxTrace Nigeria API')
+    .setDescription(`
+      ## VaxTrace Nigeria - Vaccine Supply Chain Analytics API
+      
+      ### Overview
+      VaxTrace is a high-level analytics dashboard for Nigeria's vaccine supply chain,
+      built on top of OpenLMIS infrastructure.
+      
+      ### Authentication
+      Most endpoints require JWT authentication. Include the token in the Authorization header:
+      \`Bearer YOUR_JWT_TOKEN\`
+      
+      ### Rate Limiting
+      API requests are rate-limited to 100 requests per minute per IP.
+      
+      ### Versioning
+      The API is versioned using URI versioning (e.g., \`/api/v1/...\`).
+      
+      ### Support
+      For API support, contact: api@vaxtrace.ng
+    `)
+    .setVersion('1.0')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        name: 'JWT',
+        description: 'Enter JWT token',
+        in: 'header',
+      },
+      'JWT-auth', // This name must match the one used in @ApiBearerAuth() decorator
+    )
+    .addTag('health', 'Health check and monitoring endpoints')
+    .addTag('auth', 'Authentication and user management')
+    .addTag('openlmis', 'OpenLMIS integration endpoints')
+    .addTag('stock', 'Vaccine stock data and analytics')
+    .addTag('facilities', 'Healthcare facility management')
+    .addTag('alerts', 'Stockout alerts and notifications')
+    .addTag('delivery', 'Vaccine delivery tracking')
+    .addTag('lmd', 'Last Mile Delivery optimization')
+    .addTag('predictions', 'ML-based stock predictions')
+    .addTag('webhook', 'Webhook management for real-time sync')
+    .setContact('VaxTrace Team', 'https://vaxtrace.ng', 'api@vaxtrace.ng')
+    .setLicense('MIT', 'https://github.com/vaxtrace/vaxtrace-nigeria/blob/main/LICENSE')
+    .addServer('http://localhost:8000', 'Development')
+    .addServer('https://api.vaxtrace.ng', 'Production')
+    .build();
+
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api/docs', app, document, {
+    swaggerOptions: {
+      persistAuthorization: true,
+      docExpansion: 'none',
+      filter: true,
+      showRequestDuration: true,
+    },
+    customSiteTitle: 'VaxTrace API Docs',
+  });
+
+  const logger = new Logger('Swagger');
+  logger.log(`Swagger documentation available at: http://localhost:${configService.get('PORT')}/api/docs`);
 }
 
 bootstrap().catch((error) => {

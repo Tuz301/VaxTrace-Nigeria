@@ -23,6 +23,11 @@
     "test": "npm run test:backend && npm run test:frontend",
     "test:backend": "cd backend && npm run test",
     "test:frontend": "cd frontend && npm run test",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:headed": "playwright test --headed",
+    "test:lighthouse": "lhci autorun",
     "test:load": "k6 run tests/load/api-load-test.js",
     "test:load:simple": "k6 run tests/load/simple-load-test.js",
     "test:load:stress": "k6 run --vus 500 --duration 5m tests/load/api-load-test.js",
@@ -35,6 +40,8 @@
     "docker:build": "docker-compose build"
   },
   "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "@lhci/cli": "^0.12.0",
     "concurrently": "^8.2.2",
     "prettier": "^3.1.1"
   },

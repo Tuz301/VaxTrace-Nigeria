@@ -81,9 +81,11 @@ export class OpenLMISService implements OnModuleInit, OnModuleDestroy {
     this.axiosInstance = axios.create({
       baseURL: this.configService.get<string>('OPENLMIS_BASE_URL'),
       timeout: 30000, // 30 seconds
+      decompress: false, // Disable automatic decompression to handle gzip properly
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
+        'Accept-Encoding': 'gzip, deflate',
       },
     });
 
@@ -214,16 +216,22 @@ export class OpenLMISService implements OnModuleInit, OnModuleDestroy {
       );
 
       const tokenData = response.data;
-      const expiresAt = new Date(Date.now() + tokenData.expires_in * 1000);
+      
+      // Validate expires_in and use default (1 hour) if invalid
+      const expiresIn = typeof tokenData.expires_in === 'number' && tokenData.expires_in > 0
+        ? tokenData.expires_in
+        : 3600; // Default to 1 hour
+      
+      const actualExpiresAt = new Date(Date.now() + expiresIn * 1000);
 
-      // Cache token (refresh 5 minutes before expiry)
+      // Cache token with actual expiry time
       this.tokenCache = {
         token: tokenData.access_token,
-        expiresAt: new Date(expiresAt.getTime() - 5 * 60 * 1000),
+        expiresAt: actualExpiresAt,
         refreshToken: tokenData.refresh_token,
       };
 
-      this.logger.log('Successfully fetched new OpenLMIS access token');
+      this.logger.log(`Successfully fetched new OpenLMIS access token (expires in ${expiresIn}s)`);
       
       return tokenData.access_token;
     } catch (error) {
@@ -246,8 +254,15 @@ export class OpenLMISService implements OnModuleInit, OnModuleDestroy {
 
     const timeUntilExpiry = this.tokenCache.expiresAt.getTime() - Date.now();
     
-    // Refresh 5 minutes before expiry
-    const refreshDelay = Math.max(timeUntilExpiry - 5 * 60 * 1000, 0);
+    // Validate timeUntilExpiry - if NaN or negative, use default delay
+    const validTimeUntilExpiry = isNaN(timeUntilExpiry) || timeUntilExpiry < 0
+      ? 3600 * 1000 // Default to 1 hour if invalid
+      : timeUntilExpiry;
+    
+    // Refresh 5 minutes before expiry, but minimum 30 seconds to prevent infinite loops
+    const refreshDelay = Math.max(validTimeUntilExpiry - 5 * 60 * 1000, 30 * 1000);
+
+    this.logger.debug(`Scheduling token refresh in ${Math.round(refreshDelay / 1000)}s (expires in ${Math.round(validTimeUntilExpiry / 1000)}s)`);
 
     this.tokenRefreshTimer = setTimeout(async () => {
       this.logger.log('Refreshing OpenLMIS token...');
