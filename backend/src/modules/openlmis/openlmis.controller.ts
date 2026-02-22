@@ -1,9 +1,9 @@
 /**
  * VaxTrace Nigeria - OpenLMIS Integration Controller
- * 
+ *
  * This controller provides the API endpoints for integrating with OpenLMIS.
  * It acts as the "Data Orchestrator" between OpenLMIS and VaxTrace.
- * 
+ *
  * Features:
  * - Stock data fetching with caching
  * - Facility data synchronization
@@ -15,6 +15,7 @@
 import { Controller, Get, Post, Put, Delete, Param, Query, Body, Logger } from '@nestjs/common';
 import { OpenLMISService } from './openlmis.service';
 import { OpenLMISAPIClientService } from './openlmis-api-client.service';
+import { OpenLMISAuthService } from './openlmis-auth.service';
 import { CacheService } from '../cache/cache.service';
 import { ProtobufService } from '../protobuf/protobuf.service';
 import * as crypto from 'crypto';
@@ -95,6 +96,7 @@ export class OpenLMISController {
   constructor(
     private readonly openlmisService: OpenLMISService,
     private readonly openlmisApiClientService: OpenLMISAPIClientService,
+    private readonly openlmisAuthService: OpenLMISAuthService,
     private readonly cacheService: CacheService,
     private readonly protobufService: ProtobufService,
   ) {}
@@ -121,6 +123,130 @@ export class OpenLMISController {
         status: isHealthy ? 'healthy' : 'unhealthy',
         timestamp: new Date().toISOString(),
         openlmisUrl: process.env.OPENLMIS_BASE_URL || 'not configured',
+      },
+      meta: {
+        requestId: crypto.randomUUID(),
+      },
+    };
+  }
+
+  /**
+   * Debug endpoint to test available OpenLMIS API endpoints
+   *
+   * GET /api/v1/openlmis/debug/endpoints
+   */
+  @Get('debug/endpoints')
+  @ApiOperation({ summary: 'Debug: Test which OpenLMIS endpoints are available' })
+  async debugEndpoints() {
+    this.logger.log('Testing OpenLMIS API endpoints availability');
+    
+    const baseUrl = process.env.OPENLMIS_BASE_URL || 'unknown';
+    const results: Array<{
+      endpoint: string;
+      path?: string;
+      status: number | string;
+      available: boolean;
+      error?: string;
+      structure?: string;
+      totalElements?: number;
+      pageSize?: number;
+      count?: number;
+      sampleItem?: any;
+    }> = [];
+
+    // List of endpoints to test
+    const endpointsToTest = [
+      { path: '/api/system/info', method: 'GET', name: 'System Info' },
+      { path: '/api/facilities?page=0&size=5', method: 'GET', name: 'Facilities' },
+      { path: '/api/facilities?pageSize=5', method: 'GET', name: 'Facilities (alt)' },
+      { path: '/api/stockCards?page=0&size=5', method: 'GET', name: 'Stock Cards' },
+      { path: '/api/stockCards?pageSize=5', method: 'GET', name: 'Stock Cards (alt)' },
+      { path: '/api/requisitions?page=0&size=5', method: 'GET', name: 'Requisitions' },
+      { path: '/api/requisitions?pageSize=5', method: 'GET', name: 'Requisitions (alt)' },
+      { path: '/api/orderables', method: 'GET', name: 'Orderables (Products)' },
+      { path: '/api/programs', method: 'GET', name: 'Programs' },
+      { path: '/api/geographicZones', method: 'GET', name: 'Geographic Zones' },
+    ];
+
+    // Get auth headers
+    let authHeaders: HeadersInit = {};
+    try {
+      authHeaders = await this.openlmisAuthService.getAuthHeaders();
+    } catch (error) {
+      this.logger.error(`Failed to get auth headers: ${error}`);
+    }
+
+    // Test each endpoint
+    for (const endpoint of endpointsToTest) {
+      try {
+        const url = `${baseUrl}${endpoint.path}`;
+        const response = await fetch(url, {
+          method: endpoint.method,
+          headers: {
+            ...authHeaders,
+            'Accept': 'application/json',
+          },
+        });
+
+        const result: any = {
+          endpoint: endpoint.name,
+          path: endpoint.path,
+          status: response.status,
+          available: response.ok,
+        };
+
+        if (response.ok) {
+          try {
+            const data = await response.json();
+            // Get basic info about the response structure
+            if (data.content !== undefined) {
+              result.structure = 'paginated (has content property)';
+              result.totalElements = data.totalElements || data.pageable?.totalElements;
+              result.pageSize = data.pageable?.pageSize || data.size;
+            } else if (Array.isArray(data)) {
+              result.structure = 'direct array';
+              result.count = data.length;
+            } else {
+              result.structure = 'object';
+            }
+            // Show first item as sample
+            if (data.content && data.content.length > 0) {
+              result.sampleItem = data.content[0];
+            } else if (Array.isArray(data) && data.length > 0) {
+              result.sampleItem = data[0];
+            } else {
+              result.sampleItem = data;
+            }
+          } catch (e) {
+            result.error = 'Failed to parse JSON response';
+          }
+        } else {
+          result.error = response.statusText;
+        }
+
+        results.push(result);
+      } catch (error: any) {
+        results.push({
+          endpoint: endpoint.name,
+          path: endpoint.path,
+          status: 'ERROR',
+          available: false,
+          error: error.message || 'Unknown error',
+        });
+      }
+    }
+
+    return {
+      success: true,
+      data: {
+        openlmisUrl: baseUrl,
+        timestamp: new Date().toISOString(),
+        endpoints: results,
+        summary: {
+          total: results.length,
+          available: results.filter(r => r.available).length,
+          unavailable: results.filter(r => !r.available).length,
+        },
       },
       meta: {
         requestId: crypto.randomUUID(),

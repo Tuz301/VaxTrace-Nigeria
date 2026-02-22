@@ -1,6 +1,6 @@
 /**
  * VaxTrace Nigeria - Root Application Module
- * 
+ *
  * This is the root module that imports all other modules
  * and configures the application.
  */
@@ -22,6 +22,7 @@ import { AuthModule } from './auth/auth.module';
 import { DeliveryModule } from './delivery/delivery.module';
 import { AlertsModule } from './alerts/alerts.module';
 import { PredictiveInsightsModule } from './predictive-insights/predictive-insights.module';
+import { WinstonLoggerModule } from '../common/logger.module';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { PredictiveInsightsModule } from './predictive-insights/predictive-insig
     }]),
 
     // Feature modules
+    WinstonLoggerModule,
     CacheModule,
     OpenLMISModule,
     ProtobufModule,

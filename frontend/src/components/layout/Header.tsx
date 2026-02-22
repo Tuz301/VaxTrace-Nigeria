@@ -33,6 +33,7 @@ export function Header({ className }: HeaderProps) {
 
   return (
     <header
+      role="banner"
       className={cn(
         'sticky top-0 z-30 w-full',
         'bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800',
@@ -46,16 +47,16 @@ export function Header({ className }: HeaderProps) {
         
         {/* Page Title - Hidden on mobile, shown on desktop */}
         <div className="hidden lg:block">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+          <h1 className="text-lg font-semibold text-slate-900 dark:text-white" id="page-title">
             {getPageTitle()}
-          </h2>
+          </h1>
         </div>
       </div>
 
       {/* Center Section: Search Bar (Desktop only) */}
-      <div className="hidden md:flex flex-1 max-w-md mx-4">
+      <div className="hidden md:flex flex-1 max-w-md mx-4" role="search">
         <div className="relative w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" aria-hidden="true" />
           <input
             type="search"
             placeholder="Search facilities, vaccines, alerts..."
@@ -66,8 +67,12 @@ export function Header({ className }: HeaderProps) {
               'focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent',
               'transition-all duration-200'
             )}
-            aria-label="Search"
+            aria-label="Search facilities, vaccines, and alerts"
+            aria-describedby="search-description"
           />
+          <span id="search-description" className="sr-only">
+            Search through facilities, vaccines, and alerts by typing keywords
+          </span>
         </div>
       </div>
 
@@ -75,15 +80,18 @@ export function Header({ className }: HeaderProps) {
       <div className="flex items-center gap-2 lg:gap-4">
         {/* Alert Notifications */}
         <button
+          type="button"
           className={cn(
             'relative p-2 rounded-lg',
             'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800',
-            'focus:outline-none focus:ring-2 focus:ring-emerald-500',
+            'focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2',
             'transition-all duration-200'
           )}
           aria-label={`Notifications${alertCount > 0 ? ` (${alertCount} unread)` : ''}`}
+          aria-live="polite"
+          aria-atomic="true"
         >
-          <Bell className="w-5 h-5" />
+          <Bell className="w-5 h-5" aria-hidden="true" />
           {alertCount > 0 && (
             <span
               className={cn(
@@ -102,26 +110,30 @@ export function Header({ className }: HeaderProps) {
           className={cn(
             'hidden sm:flex p-2 rounded-lg',
             'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800',
-            'focus:outline-none focus:ring-2 focus:ring-emerald-500',
+            'focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2',
             'transition-all duration-200'
           )}
-          aria-label="Settings"
+          aria-label="Go to settings"
+          aria-current={pathname === '/dashboard/settings' ? 'page' : undefined}
         >
-          <Settings className="w-5 h-5" />
+          <Settings className="w-5 h-5" aria-hidden="true" />
         </Link>
 
         {/* User Profile */}
         <div className="flex items-center gap-3">
           <button
+            type="button"
             className={cn(
               'flex items-center gap-2 px-2 py-1.5 rounded-lg',
               'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800',
-              'focus:outline-none focus:ring-2 focus:ring-emerald-500',
+              'focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2',
               'transition-all duration-200'
             )}
             aria-label="User menu"
+            aria-expanded="false"
+            aria-haspopup="true"
           >
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center" aria-hidden="true">
               <User className="w-4 h-4 text-white" />
             </div>
             <div className="hidden lg:block text-left">
@@ -132,7 +144,7 @@ export function Header({ className }: HeaderProps) {
                 {userSession?.user?.role?.replace(/_/g, ' ') || 'Guest'}
               </p>
             </div>
-            <ChevronDown className="w-4 h-4 hidden lg:block text-slate-600 dark:text-slate-400" />
+            <ChevronDown className="w-4 h-4 hidden lg:block text-slate-600 dark:text-slate-400" aria-hidden="true" />
           </button>
         </div>
       </div>

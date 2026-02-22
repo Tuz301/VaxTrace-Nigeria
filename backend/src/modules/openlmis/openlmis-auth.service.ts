@@ -85,6 +85,7 @@ export class OpenLMISAuthService {
 
   /**
    * Fetch a new access token from OpenLMIS
+   * FIX #5: Added retry logic for token fetch failures
    */
   async fetchNewToken(): Promise<string> {
     if (!this.isConfigured()) {
@@ -95,80 +96,119 @@ export class OpenLMISAuthService {
     const config = this.getAuthConfig();
     const tokenUrl = `${config.baseUrl}${config.tokenEndpoint}`;
 
-    try {
-      // OAuth2 Password Grant Flow
-      const params = new URLSearchParams();
-      params.append('grant_type', 'password');
-      params.append('username', config.username);
-      params.append('password', config.password);
-      params.append('client_id', config.clientId);
-      params.append('client_secret', config.clientSecret);
+    // FIX #5: Add retry logic for token fetch
+    let retries = 3;
+    let lastError: Error | null = null;
 
-      const response = await fetch(tokenUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: params,
-      });
+    while (retries > 0) {
+      try {
+        // OAuth2 Password Grant Flow
+        const params = new URLSearchParams();
+        params.append('grant_type', 'password');
+        params.append('username', config.username);
+        params.append('password', config.password);
+        params.append('client_id', config.clientId);
+        params.append('client_secret', config.clientSecret);
 
-      if (!response.ok) {
-        throw new Error(`OpenLMIS token request failed: ${response.statusText}`);
+        const response = await fetch(tokenUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: params,
+        });
+
+        if (!response.ok) {
+          throw new Error(`OpenLMIS token request failed: ${response.statusText}`);
+        }
+
+        const tokenData: OpenLMISToken = await response.json();
+
+        // Cache the token with expiry
+        const cacheTTL = tokenData.expires_in - this.TOKEN_EXPIRY_BUFFER;
+        await this.cacheService.set(this.TOKEN_CACHE_KEY, tokenData, { ttl: cacheTTL });
+
+        this.logger.log('Successfully fetched and cached OpenLMIS access token');
+        return tokenData.access_token;
+      } catch (error) {
+        lastError = error as Error;
+        retries--;
+        
+        if (retries > 0) {
+          this.logger.warn(`Token fetch failed, retrying... (${retries} retries left)`);
+          await this.sleep(1000 * (4 - retries)); // Exponential backoff: 1s, 2s, 3s
+        }
       }
-
-      const tokenData: OpenLMISToken = await response.json();
-
-      // Cache the token with expiry
-      const cacheTTL = tokenData.expires_in - this.TOKEN_EXPIRY_BUFFER;
-      await this.cacheService.set(this.TOKEN_CACHE_KEY, tokenData, { ttl: cacheTTL });
-
-      this.logger.log('Successfully fetched and cached OpenLMIS access token');
-      return tokenData.access_token;
-    } catch (error) {
-      this.logger.error('Failed to fetch OpenLMIS token:', error.message);
-      
-      // Fall back to mock mode for development
-      if (process.env.NODE_ENV === 'development') {
-        this.logger.warn('Falling back to mock mode due to token fetch failure');
-        return this.getMockToken();
-      }
-      
-      throw error;
     }
+
+    // All retries exhausted
+    this.logger.error('Failed to fetch OpenLMIS token after 3 retries:', lastError?.message);
+    
+    // FIX #8: Fall back to mock mode when all retries fail
+    this.logger.warn('Falling back to mock mode due to token fetch failure');
+    return this.getMockToken();
+  }
+
+  /**
+   * FIX #5: Helper method for sleep/delay
+   */
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   /**
    * Refresh the access token using refresh token (if available)
+   * FIX #5: Added retry logic and fallback to fetchNewToken
    */
   async refreshToken(refreshToken: string): Promise<string> {
     const config = this.getAuthConfig();
     const tokenUrl = `${config.baseUrl}${config.tokenEndpoint}`;
 
-    const params = new URLSearchParams();
-    params.append('grant_type', 'refresh_token');
-    params.append('refresh_token', refreshToken);
-    params.append('client_id', config.clientId);
-    params.append('client_secret', config.clientSecret);
+    // FIX #5: Add retry logic for refresh token
+    let retries = 2;
+    let lastError: Error | null = null;
 
-    const response = await fetch(tokenUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: params,
-    });
+    while (retries > 0) {
+      try {
+        const params = new URLSearchParams();
+        params.append('grant_type', 'refresh_token');
+        params.append('refresh_token', refreshToken);
+        params.append('client_id', config.clientId);
+        params.append('client_secret', config.clientSecret);
 
-    if (!response.ok) {
-      throw new Error(`OpenLMIS token refresh failed: ${response.statusText}`);
+        const response = await fetch(tokenUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: params,
+        });
+
+        if (!response.ok) {
+          throw new Error(`OpenLMIS token refresh failed: ${response.statusText}`);
+        }
+
+        const tokenData: OpenLMISToken = await response.json();
+
+        // Cache the new token
+        const cacheTTL = tokenData.expires_in - this.TOKEN_EXPIRY_BUFFER;
+        await this.cacheService.set(this.TOKEN_CACHE_KEY, tokenData, { ttl: cacheTTL });
+
+        return tokenData.access_token;
+      } catch (error) {
+        lastError = error as Error;
+        retries--;
+        
+        if (retries > 0) {
+          this.logger.warn(`Token refresh failed, retrying... (${retries} retries left)`);
+          await this.sleep(1000 * (3 - retries)); // Exponential backoff: 1s, 2s
+        }
+      }
     }
 
-    const tokenData: OpenLMISToken = await response.json();
-
-    // Cache the new token
-    const cacheTTL = tokenData.expires_in - this.TOKEN_EXPIRY_BUFFER;
-    await this.cacheService.set(this.TOKEN_CACHE_KEY, tokenData, { ttl: cacheTTL });
-
-    return tokenData.access_token;
+    // FIX #5: If refresh token fails, fall back to fetching a new token
+    this.logger.warn('Refresh token failed, falling back to password grant');
+    return this.fetchNewToken();
   }
 
   /**

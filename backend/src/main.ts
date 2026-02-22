@@ -6,6 +6,7 @@
  *
  * FIX #10: Database connection pool management
  * FIX #12: Graceful shutdown
+ * FIX #15: Winston structured logging
  */
 
 import { NestFactory } from '@nestjs/core';
@@ -25,6 +26,7 @@ async function bootstrap() {
   
   const app = await NestFactory.create(AppModule, {
     logger: ['log', 'error', 'warn', 'debug', 'verbose'],
+    bufferLogs: true,
   });
 
   const configService = app.get(ConfigService);

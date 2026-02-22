@@ -71,6 +71,7 @@ export function Sidebar({ className }: SidebarProps) {
           className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden"
           onClick={toggleSidebar}
           aria-hidden="true"
+          role="presentation"
         />
       )}
 
@@ -84,7 +85,10 @@ export function Sidebar({ className }: SidebarProps) {
           sidebarOpen ? 'translate-x-0' : '-translate-x-full',
           className
         )}
+        role="navigation"
         aria-label="Main navigation"
+        aria-hidden={!sidebarOpen}
+        inert={!sidebarOpen}
       >
         {/* Logo Section */}
         <div className="flex items-center justify-between h-16 px-4 border-b border-slate-200 dark:border-slate-800">
@@ -109,16 +113,22 @@ export function Sidebar({ className }: SidebarProps) {
 
           {/* Mobile Close Button */}
           <button
+            type="button"
             onClick={toggleSidebar}
-            className="lg:hidden p-2 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="lg:hidden p-2 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
             aria-label="Close navigation menu"
+            aria-controls="sidebar-navigation"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
         {/* Navigation Links */}
-        <nav className="flex-1 overflow-y-auto py-4 px-3" aria-label="Primary navigation">
+        <nav
+          className="flex-1 overflow-y-auto py-4 px-3"
+          aria-label="Primary navigation"
+          id="sidebar-navigation"
+        >
           <ul className="space-y-1" role="list">
             {NAV_ITEMS.map((item) => {
               const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -144,16 +154,19 @@ export function Sidebar({ className }: SidebarProps) {
                     )}
                     aria-label={item.label}
                     aria-current={isActive ? 'page' : undefined}
+                    aria-describedby={`nav-${item.href.replace(/\//g, '-')}-desc`}
                   >
                     <Icon
                       className={cn(
                         'w-5 h-5 flex-shrink-0 transition-colors',
-                        isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-400'
                       )}
                       aria-hidden="true"
                     />
                     <span className="font-medium">{item.label}</span>
-                    
+                    <span id={`nav-${item.href.replace(/\//g, '-')}-desc`} className="sr-only">
+                      {item.description}
+                    </span>
+                   
                     {/* Active indicator */}
                     {isActive && (
                       <span className="ml-auto w-1.5 h-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400 shadow-lg shadow-emerald-400/50" />
