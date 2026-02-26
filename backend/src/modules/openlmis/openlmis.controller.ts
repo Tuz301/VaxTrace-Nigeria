@@ -12,12 +12,13 @@
  * - Delta sync for efficiency
  */
 
-import { Controller, Get, Post, Put, Delete, Param, Query, Body, Logger } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Query, Body, Logger, UseInterceptors } from '@nestjs/common';
 import { OpenLMISService } from './openlmis.service';
 import { OpenLMISAPIClientService } from './openlmis-api-client.service';
 import { OpenLMISAuthService } from './openlmis-auth.service';
 import { CacheService } from '../cache/cache.service';
 import { ProtobufService } from '../protobuf/protobuf.service';
+import { ContentNegotiationInterceptor, ProtobufResponse } from '../../common/content-negotiation.interceptor';
 import * as crypto from 'crypto';
 import {
   IsOptional,
@@ -126,6 +127,237 @@ export class OpenLMISController {
       },
       meta: {
         requestId: crypto.randomUUID(),
+      },
+    };
+  }
+
+  /**
+   * Detailed connection status endpoint
+   * Provides comprehensive information about OpenLMIS connection status
+   *
+   * GET /api/v1/openlmis/status
+   */
+  @Get('status')
+  @ApiOperation({ summary: 'Get detailed OpenLMIS connection status' })
+  async connectionStatus() {
+    this.logger.log('Fetching OpenLMIS connection status');
+
+    const isHealthy = await this.openlmisService.healthCheck();
+    const mockMode = this.openlmisService.isMockMode();
+    const circuitBreakerState = this.openlmisService.getCircuitBreakerState();
+    const tokenCacheStatus = this.openlmisService.getTokenCacheStatus();
+
+    return {
+      success: true,
+      data: {
+        status: isHealthy ? 'healthy' : 'unhealthy',
+        mode: mockMode ? 'MOCK' : 'REAL',
+        openlmisUrl: process.env.OPENLMIS_BASE_URL || 'not configured',
+        clientId: process.env.OPENLMIS_CLIENT_ID || 'not configured',
+        username: process.env.OPENLMIS_USERNAME || 'not configured',
+        circuitBreaker: {
+          isOpen: circuitBreakerState.isOpen,
+          failureCount: circuitBreakerState.failureCount,
+          threshold: 20, // CIRCUIT_BREAKER_THRESHOLD
+          lastFailureTime: circuitBreakerState.lastFailureTime?.toISOString() || null,
+          lastSuccessTime: circuitBreakerState.lastSuccessTime?.toISOString() || null,
+        },
+        token: {
+          hasToken: tokenCacheStatus.hasToken,
+          expiresAt: tokenCacheStatus.expiresAt,
+          timeUntilExpiry: tokenCacheStatus.timeUntilExpiry,
+          timeUntilExpiryMinutes: tokenCacheStatus.timeUntilExpiry
+            ? Math.round(tokenCacheStatus.timeUntilExpiry / 60000)
+            : null,
+        },
+        timestamp: new Date().toISOString(),
+      },
+      meta: {
+        requestId: crypto.randomUUID(),
+      },
+    };
+  }
+
+  /**
+   * Test OpenLMIS connection with detailed diagnostics
+   *
+   * GET /api/v1/openlmis/test-connection
+   */
+  @Get('test-connection')
+  @ApiOperation({ summary: 'Test OpenLMIS connection with diagnostics' })
+  async testConnection() {
+    this.logger.log('Testing OpenLMIS connection with diagnostics...');
+    
+    const baseUrl = process.env.OPENLMIS_BASE_URL;
+    const clientId = process.env.OPENLMIS_CLIENT_ID;
+    const username = process.env.OPENLMIS_USERNAME;
+    const clientSecret = process.env.OPENLMIS_CLIENT_SECRET;
+    const password = process.env.OPENLMIS_PASSWORD;
+    
+    const results: {
+      step: string;
+      status: 'success' | 'error' | 'warning';
+      message: string;
+      details?: any;
+    }[] = [];
+    
+    // Step 1: Check configuration
+    results.push({
+      step: 'Configuration Check',
+      status: 'success',
+      message: 'Environment variables are set',
+      details: {
+        baseUrl: baseUrl || 'NOT SET',
+        clientId: clientId || 'NOT SET',
+        username: username || 'NOT SET',
+        clientSecret: clientSecret ? '***SET***' : 'NOT SET',
+        password: password ? '***SET***' : 'NOT SET',
+      },
+    });
+    
+    // Step 2: Validate configuration
+    if (!baseUrl) {
+      results.push({
+        step: 'Configuration Validation',
+        status: 'error',
+        message: 'OPENLMIS_BASE_URL is not set',
+      });
+      return {
+        success: false,
+        data: { results },
+        meta: { requestId: crypto.randomUUID() },
+      };
+    }
+    
+    if (clientId === 'changeme' || !clientId) {
+      results.push({
+        step: 'Configuration Validation',
+        status: 'error',
+        message: 'OPENLMIS_CLIENT_ID is set to placeholder value "changeme" or not set',
+        details: {
+          fix: 'Update OPENLMIS_CLIENT_ID in .env with your actual OpenLMIS client ID',
+        },
+      });
+    } else {
+      results.push({
+        step: 'Configuration Validation',
+        status: 'success',
+        message: 'Configuration appears valid',
+      });
+    }
+    
+    // Step 3: Test network connectivity
+    try {
+      const axios = require('axios');
+      const response = await axios.get(baseUrl, {
+        timeout: 10000,
+        validateStatus: () => true, // Accept any status code
+      });
+      
+      results.push({
+        step: 'Network Connectivity',
+        status: response.status < 500 ? 'success' : 'warning',
+        message: `Server responded with status ${response.status}`,
+        details: {
+          status: response.status,
+          statusText: response.statusText,
+        },
+      });
+    } catch (error: any) {
+      results.push({
+        step: 'Network Connectivity',
+        status: 'error',
+        message: `Cannot reach OpenLMIS server: ${error.message}`,
+        details: {
+          error: error.code,
+          suggestion: 'Check if OPENLMIS_BASE_URL is correct and server is accessible',
+        },
+      });
+      return {
+        success: false,
+        data: { results },
+        meta: { requestId: crypto.randomUUID() },
+      };
+    }
+    
+    // Step 4: Test token endpoint
+    try {
+      const axios = require('axios');
+      const authHeader = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+      
+      const response = await axios.post(
+        `${baseUrl}/api/oauth/token`,
+        new URLSearchParams({
+          grant_type: 'password',
+          username,
+          password,
+        }),
+        {
+          headers: {
+            'Authorization': `Basic ${authHeader}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          timeout: 10000,
+          validateStatus: () => true,
+        }
+      );
+      
+      if (response.status === 200 && response.data?.access_token) {
+        results.push({
+          step: 'Authentication',
+          status: 'success',
+          message: 'Successfully obtained access token',
+          details: {
+            tokenType: response.data.token_type,
+            expiresIn: response.data.expires_in,
+            scope: response.data.scope,
+          },
+        });
+      } else if (response.status === 401) {
+        results.push({
+          step: 'Authentication',
+          status: 'error',
+          message: 'Authentication failed - invalid credentials',
+          details: {
+            response: response.data,
+            fix: 'Check OPENLMIS_CLIENT_ID, OPENLMIS_CLIENT_SECRET, OPENLMIS_USERNAME, and OPENLMIS_PASSWORD',
+          },
+        });
+      } else {
+        results.push({
+          step: 'Authentication',
+          status: 'error',
+          message: `Unexpected response: ${response.status}`,
+          details: {
+            response: response.data,
+          },
+        });
+      }
+    } catch (error: any) {
+      results.push({
+        step: 'Authentication',
+        status: 'error',
+        message: `Token request failed: ${error.message}`,
+        details: {
+          error: error.code,
+        },
+      });
+    }
+    
+    return {
+      success: true,
+      data: {
+        results,
+        summary: {
+          total: results.length,
+          success: results.filter(r => r.status === 'success').length,
+          errors: results.filter(r => r.status === 'error').length,
+          warnings: results.filter(r => r.status === 'warning').length,
+        },
+      },
+      meta: {
+        requestId: crypto.randomUUID(),
+        timestamp: new Date().toISOString(),
       },
     };
   }
@@ -273,6 +505,8 @@ export class OpenLMISController {
    * - protobuf: Return Protobuf format
    */
   @Get('stock')
+  @UseInterceptors(ContentNegotiationInterceptor)
+  @ProtobufResponse({ typeName: 'StockSnapshot' })
   @ApiOperation({ summary: 'Get stock data from OpenLMIS' })
   @ApiResponse({ status: 200, description: 'Stock data retrieved successfully' })
   async getStockData(
@@ -322,6 +556,8 @@ export class OpenLMISController {
    * GET /api/v1/openlmis/stock/aggregated
    */
   @Get('stock/aggregated')
+  @UseInterceptors(ContentNegotiationInterceptor)
+  @ProtobufResponse({ typeName: 'StockSnapshot' })
   @ApiOperation({ summary: 'Get aggregated stock data by state' })
   async getAggregatedStock(
     @Query('stateId') stateId: string,
@@ -367,6 +603,8 @@ export class OpenLMISController {
    * GET /api/v1/openlmis/stock/national
    */
   @Get('stock/national')
+  @UseInterceptors(ContentNegotiationInterceptor)
+  @ProtobufResponse({ typeName: 'StockSnapshot' })
   @ApiOperation({ summary: 'Get national stock summary' })
   async getNationalStock() {
     this.logger.log('Fetching national stock summary');

@@ -24,6 +24,7 @@ export interface OpenLMISAuthConfig {
   password: string;
   baseUrl: string;
   tokenEndpoint: string;
+  grantType: 'password' | 'client_credentials'; // AUDIT FIX: Support both grant types
 }
 
 @Injectable()
@@ -41,6 +42,9 @@ export class OpenLMISAuthService {
    * Get the OAuth2 configuration from environment variables
    */
   getAuthConfig(): OpenLMISAuthConfig {
+    // AUDIT FIX: Default to client_credentials for production (more secure)
+    const grantType = this.configService.get<string>('OPENLMIS_GRANT_TYPE', 'client_credentials') as 'password' | 'client_credentials';
+    
     return {
       clientId: this.configService.get<string>('OPENLMIS_CLIENT_ID') || '',
       clientSecret: this.configService.get<string>('OPENLMIS_CLIENT_SECRET') || '',
@@ -48,6 +52,7 @@ export class OpenLMISAuthService {
       password: this.configService.get<string>('OPENLMIS_PASSWORD') || '',
       baseUrl: this.configService.get<string>('OPENLMIS_BASE_URL') || '',
       tokenEndpoint: this.configService.get<string>('OPENLMIS_TOKEN_ENDPOINT') || '/oauth/token',
+      grantType,
     };
   }
 
@@ -56,6 +61,13 @@ export class OpenLMISAuthService {
    */
   isConfigured(): boolean {
     const config = this.getAuthConfig();
+    
+    // AUDIT FIX: Validate based on grant type
+    if (config.grantType === 'client_credentials') {
+      return !!(config.clientId && config.clientSecret && config.baseUrl);
+    }
+    
+    // password grant requires username and password
     return !!(
       config.clientId &&
       config.clientSecret &&
@@ -102,13 +114,21 @@ export class OpenLMISAuthService {
 
     while (retries > 0) {
       try {
-        // OAuth2 Password Grant Flow
+        // AUDIT FIX: Support both password and client_credentials grant types
+        // client_credentials is recommended for production service accounts
         const params = new URLSearchParams();
-        params.append('grant_type', 'password');
-        params.append('username', config.username);
-        params.append('password', config.password);
+        params.append('grant_type', config.grantType);
         params.append('client_id', config.clientId);
         params.append('client_secret', config.clientSecret);
+
+        // Only include username/password for password grant
+        if (config.grantType === 'password') {
+          params.append('username', config.username);
+          params.append('password', config.password);
+          this.logger.debug('[AUDIT] Using OAuth2 password grant flow (NOT recommended for production)');
+        } else {
+          this.logger.debug('[AUDIT] Using OAuth2 client_credentials grant flow (RECOMMENDED for production)');
+        }
 
         const response = await fetch(tokenUrl, {
           method: 'POST',

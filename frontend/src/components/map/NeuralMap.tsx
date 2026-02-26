@@ -65,6 +65,8 @@ interface MapNode {
   stockStatus: 'OPTIMAL' | 'UNDERSTOCKED' | 'STOCKOUT' | 'OVERSTOCKED';
   alertCount: number;
   lastSync: string;
+  // AUDIT FIX: Add stock level for 3D extrusion height calculation
+  stockLevel?: number; // Total stock quantity for height calculation
 }
 
 // ============================================
@@ -87,6 +89,15 @@ const COLORS = {
 
 const SOURCE_ID = 'vaxtrace-nodes';
 const LAYER_ID = 'vaxtrace-nodes-layer';
+const EXTRUSION_LAYER_ID = 'vaxtrace-nodes-extrusion';
+
+// AUDIT FIX: 3D Extrusion Configuration
+const EXTRUSION_CONFIG = {
+  baseRadius: 0.002, // Base radius in degrees (~200m)
+  minHeight: 100, // Minimum height in meters
+  maxHeight: 5000, // Maximum height in meters
+  heightScale: 10, // Height multiplier for stock quantity
+};
 
 // ============================================
 // COMPONENT
@@ -203,33 +214,77 @@ export function NeuralMap({
         type: 'geojson',
         data: {
           type: 'FeatureCollection',
-          features: nodes.map((node) => createNodeFeature(node, filteredData)),
+          features: nodes.map((node) => createNodeFeature(node, filteredData, show3D)),
         },
       });
 
-      // Add layer
-      mapInstance.addLayer({
-        id: LAYER_ID,
-        source: SOURCE_ID,
-        type: 'circle',
-        paint: {
-          'circle-radius': [
-            'case',
-            ['boolean', ['feature-state', 'selected'], false],
-            8,
-            12,
-          ],
-          'circle-color': ['get', 'color'],
-          'circle-opacity': 0.9,
-          'circle-stroke-width': [
-            'case',
-            ['boolean', ['feature-state', 'selected'], false],
-            2,
-            4,
-          ],
-          'circle-stroke-color': '#FFFFFF',
-        },
-      });
+      // AUDIT FIX: Add 3D fill-extrusion layer when show3D is enabled
+      if (show3D) {
+        // Add fill-extrusion layer for 3D bars
+        mapInstance.addLayer({
+          id: EXTRUSION_LAYER_ID,
+          source: SOURCE_ID,
+          type: 'fill-extrusion',
+          filter: ['==', ['geometry-type'], 'Polygon'],
+          paint: {
+            'fill-extrusion-color': ['get', 'color'],
+            'fill-extrusion-height': [
+              'case',
+              ['has', 'stockLevel'],
+              [
+                'min',
+                ['*', ['get', 'stockLevel'], EXTRUSION_CONFIG.heightScale],
+                EXTRUSION_CONFIG.maxHeight
+              ],
+              EXTRUSION_CONFIG.minHeight,
+            ],
+            'fill-extrusion-base': 0,
+            'fill-extrusion-opacity': 0.8,
+          },
+        });
+
+        // Add click handler for extrusion layer
+        mapInstance.on('click', EXTRUSION_LAYER_ID, (e) => {
+          if (e.features && e.features[0]) {
+            const node = JSON.parse(e.features[0].properties?.node || '{}');
+            setSelectedNode(node);
+          }
+        });
+
+        // Hover cursor for extrusion layer
+        mapInstance.on('mouseenter', EXTRUSION_LAYER_ID, () => {
+          mapInstance.getCanvas().style.cursor = 'pointer';
+        });
+
+        mapInstance.on('mouseleave', EXTRUSION_LAYER_ID, () => {
+          mapInstance.getCanvas().style.cursor = '';
+        });
+      } else {
+        // Add 2D circle layer
+        mapInstance.addLayer({
+          id: LAYER_ID,
+          source: SOURCE_ID,
+          type: 'circle',
+          filter: ['==', ['geometry-type'], 'Point'],
+          paint: {
+            'circle-radius': [
+              'case',
+              ['boolean', ['feature-state', 'selected'], false],
+              8,
+              12,
+            ],
+            'circle-color': ['get', 'color'],
+            'circle-opacity': 0.9,
+            'circle-stroke-width': [
+              'case',
+              ['boolean', ['feature-state', 'selected'], false],
+              2,
+              4,
+            ],
+            'circle-stroke-color': '#FFFFFF',
+          },
+        });
+      }
 
       // Add labels
       mapInstance.addLayer({
@@ -251,22 +306,24 @@ export function NeuralMap({
         },
       });
 
-      // Click handler
-      mapInstance.on('click', LAYER_ID, (e) => {
-        if (e.features && e.features[0]) {
-          const node = JSON.parse(e.features[0].properties?.node || '{}');
-          setSelectedNode(node);
-        }
-      });
+      // Click handler for 2D layer (only when not in 3D mode)
+      if (!show3D) {
+        mapInstance.on('click', LAYER_ID, (e) => {
+          if (e.features && e.features[0]) {
+            const node = JSON.parse(e.features[0].properties?.node || '{}');
+            setSelectedNode(node);
+          }
+        });
 
-      // Hover cursor
-      mapInstance.on('mouseenter', LAYER_ID, () => {
-        mapInstance.getCanvas().style.cursor = 'pointer';
-      });
+        // Hover cursor
+        mapInstance.on('mouseenter', LAYER_ID, () => {
+          mapInstance.getCanvas().style.cursor = 'pointer';
+        });
 
-      mapInstance.on('mouseleave', LAYER_ID, () => {
-        mapInstance.getCanvas().style.cursor = '';
-      });
+        mapInstance.on('mouseleave', LAYER_ID, () => {
+          mapInstance.getCanvas().style.cursor = '';
+        });
+      }
     }
 
     // Update selected state
@@ -366,9 +423,18 @@ export function NeuralMap({
 // ============================================
 
 /**
- * Creates a GeoJSON feature for a map node
+ * AUDIT FIX: Creates a GeoJSON feature for a map node
+ * Supports both 2D Point and 3D Polygon geometries for fill-extrusion
+ *
+ * @param node - The map node to create a feature for
+ * @param stockData - Stock data for calculating height
+ * @param use3D - Whether to create 3D extrusion geometry
  */
-function createNodeFeature(node: MapNode, stockData: any[]): GeoJSON.Feature {
+function createNodeFeature(
+  node: MapNode,
+  stockData: any[],
+  use3D: boolean = false
+): GeoJSON.Feature {
   // Determine color based on stock status
   const color = getNodeColor(node);
 
@@ -377,6 +443,51 @@ function createNodeFeature(node: MapNode, stockData: any[]): GeoJSON.Feature {
   const totalStock = facilityStock.reduce((sum, s) => sum + s.quantity, 0);
   const alertCount = facilityStock.filter((s) => s.vvmStatus === 'CRITICAL').length;
 
+  // AUDIT FIX: Calculate stock level for 3D height
+  // Use months of stock if available, otherwise use total quantity
+  const stockLevel = node.stockLevel || totalStock || 0;
+
+  if (use3D) {
+    // Create a small polygon around the point for 3D extrusion
+    // This creates a square base for the extruded bar
+    const radius = EXTRUSION_CONFIG.baseRadius;
+    const coordinates = [
+      [
+        [node.lng - radius, node.lat - radius],
+        [node.lng + radius, node.lat - radius],
+        [node.lng + radius, node.lat + radius],
+        [node.lng - radius, node.lat + radius],
+        [node.lng - radius, node.lat - radius], // Close the polygon
+      ],
+    ];
+
+    return {
+      type: 'Feature',
+      id: node.id,
+      geometry: {
+        type: 'Polygon',
+        coordinates,
+      },
+      properties: {
+        id: node.id,
+        label: node.label,
+        code: node.code,
+        state: node.state,
+        lga: node.lga,
+        nodeType: node.nodeType,
+        stockStatus: node.stockStatus,
+        hasColdChain: node.hasColdChain,
+        hasRTM: node.hasRTM,
+        totalStock,
+        alertCount,
+        stockLevel, // AUDIT FIX: Used for dynamic height calculation
+        color,
+        node: JSON.stringify(node),
+      },
+    };
+  }
+
+  // 2D Point geometry (original behavior)
   return {
     type: 'Feature',
     id: node.id,
@@ -396,6 +507,7 @@ function createNodeFeature(node: MapNode, stockData: any[]): GeoJSON.Feature {
       hasRTM: node.hasRTM,
       totalStock,
       alertCount,
+      stockLevel,
       color,
       node: JSON.stringify(node),
     },

@@ -101,6 +101,11 @@ export class EnvironmentVariables {
   @IsOptional()
   OPENLMIS_PASSWORD: string;
 
+  // AUDIT FIX: Grant type configuration (client_credentials recommended for production)
+  @IsString()
+  @IsOptional()
+  OPENLMIS_GRANT_TYPE: 'password' | 'client_credentials';
+
   // Webhook
   @IsString()
   @IsOptional()

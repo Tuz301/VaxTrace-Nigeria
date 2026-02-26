@@ -49,9 +49,11 @@ export function BiometricLogin({ onSuccess, onError }: LoginProps) {
   const [usePin, setUsePin] = useState(false);
   const [pin, setPin] = useState('');
   const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   // Check if WebAuthn is available
   useEffect(() => {
+    setMounted(true);
     setBiometricAvailable(
       typeof window !== 'undefined' &&
       window.PublicKeyCredential !== undefined &&
@@ -254,8 +256,8 @@ export function BiometricLogin({ onSuccess, onError }: LoginProps) {
               </div>
             )}
 
-            {/* Biometric Button */}
-            {!usePin && biometricAvailable && status !== 'success' && (
+            {/* Biometric Button - Only render after mount to prevent hydration mismatch */}
+            {mounted && !usePin && biometricAvailable && status !== 'success' && (
               <button
                 onClick={handleBiometricAuth}
                 disabled={status === 'scanning' || status === 'authenticating'}
@@ -285,7 +287,7 @@ export function BiometricLogin({ onSuccess, onError }: LoginProps) {
             )}
 
             {/* Divider */}
-            {biometricAvailable && (
+            {mounted && biometricAvailable && (
               <div className="flex items-center gap-4 my-6">
                 <div className="flex-1 h-px bg-slate-700/50" />
                 <span className="text-slate-500 text-xs">OR</span>
@@ -294,7 +296,7 @@ export function BiometricLogin({ onSuccess, onError }: LoginProps) {
             )}
 
             {/* PIN Input */}
-            {(usePin || !biometricAvailable) && status !== 'success' && (
+            {mounted && (usePin || !biometricAvailable) && status !== 'success' && (
               <div className="space-y-4">
                 <div>
                   <label className="block text-slate-400 text-sm mb-2">
@@ -339,7 +341,7 @@ export function BiometricLogin({ onSuccess, onError }: LoginProps) {
                   )}
                 </button>
 
-                {biometricAvailable && (
+                {mounted && biometricAvailable && (
                   <button
                     onClick={() => setUsePin(false)}
                     className="w-full text-cyan-400 text-sm hover:underline"

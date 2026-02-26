@@ -87,8 +87,8 @@ export function Sidebar({ className }: SidebarProps) {
         )}
         role="navigation"
         aria-label="Main navigation"
-        aria-hidden={!sidebarOpen}
-        inert={!sidebarOpen}
+        aria-hidden={false}
+        inert={undefined}
       >
         {/* Logo Section */}
         <div className="flex items-center justify-between h-16 px-4 border-b border-slate-200 dark:border-slate-800">
