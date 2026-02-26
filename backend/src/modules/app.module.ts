@@ -11,6 +11,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
+import { join } from 'path';
 import { CacheModule } from './cache/cache.module';
 import { OpenLMISModule } from './openlmis/openlmis.module';
 import { ProtobufModule } from './protobuf/protobuf.module';
@@ -23,6 +24,7 @@ import { DeliveryModule } from './delivery/delivery.module';
 import { AlertsModule } from './alerts/alerts.module';
 import { PredictiveInsightsModule } from './predictive-insights/predictive-insights.module';
 import { WinstonLoggerModule } from '../common/logger.module';
+import { ContentNegotiationModule } from '../common/content-negotiation.module';
 
 @Module({
   imports: [
@@ -34,22 +36,29 @@ import { WinstonLoggerModule } from '../common/logger.module';
     }),
 
     // TypeORM - Database configuration
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: process.env.POSTGRES_HOST || 'localhost',
-      port: parseInt(process.env.POSTGRES_PORT || '5432'),
-      username: process.env.POSTGRES_USER || 'postgres',
-      password: process.env.POSTGRES_PASSWORD || 'postgres',
-      database: process.env.POSTGRES_DB || 'vaxtrace',
-      entities: [],
-      synchronize: false,
-      logging: false,
-      extra: {
-        max: 35,
-        min: 2,
-        idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 2000,
-      },
+    TypeOrmModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => ({
+        type: 'postgres',
+        host: configService.get<string>('POSTGRES_HOST') || 'localhost',
+        port: configService.get<number>('POSTGRES_PORT') || 5432,
+        username: configService.get<string>('POSTGRES_USER') || 'vaxtrace_admin',
+        password: configService.get<string>('POSTGRES_PASSWORD') || 'postgres',
+        database: configService.get<string>('POSTGRES_DB') || 'vaxtrace_nigeria',
+        logging: configService.get<string>('NODE_ENV') === 'development' ? ['error', 'warn'] : false,
+        entities: [join(__dirname, '..', 'entities', '**', '*.entity{.ts,.js}')],
+        synchronize: false,
+        ssl: configService.get<string>('NODE_ENV') === 'production' ? {
+          rejectUnauthorized: true,
+        } : false,
+        extra: {
+          max: configService.get<number>('DATABASE_POOL_MAX') || 35,
+          min: configService.get<number>('DATABASE_POOL_MIN') || 2,
+          idleTimeoutMillis: 30000,
+          connectionTimeoutMillis: 2000,
+        },
+      }),
+      inject: [ConfigService],
     }),
 
     // Schedule module for cron jobs
@@ -63,6 +72,7 @@ import { WinstonLoggerModule } from '../common/logger.module';
 
     // Feature modules
     WinstonLoggerModule,
+    ContentNegotiationModule,
     CacheModule,
     OpenLMISModule,
     ProtobufModule,
